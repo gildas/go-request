@@ -67,7 +67,7 @@ const DefaultRequestBodyLogSize = 2048
 // DefaultResponseBodyLogSize  defines the maximum size of the response body that should be logge
 const DefaultResponseBodyLogSize = 2048
 
-func (err RequestError) Error() string {
+func (err Error) Error() string {
 	return err.Status
 }
 
@@ -191,7 +191,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		log.Tracef("Response Headers: %#v", res.Header)
 
 		// Reading the response body
-		resContent, err := core.ContentFromReader(res.Body, res.Header.Get("Content-Type"), Atoi(res.Header.Get("Content-Length"), 0))
+		resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0))
 		if err != nil {
 			log.Errorf("Failed to read response body", err)
 			return nil, errors.WithStack(err)
@@ -223,7 +223,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 
 		if res.StatusCode >= 400 {
 			log.Debugf("Status: %s (Code %d)", res.Status, res.StatusCode)
-			return resContent.Reader(), errors.WithStack(RequestError{res.StatusCode, res.Status})
+			return resContent.Reader(), errors.WithStack(Error{res.StatusCode, res.Status})
 		}
 
 		// Processing the status
