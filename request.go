@@ -288,7 +288,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		// Here we ignore options.PayloadType as the Content embeds its ContentType
 		log.Tracef("Payload is a Content (Type: %s, size: %d)", content.Type, content.Length)
 		return content.Reader(), nil
-	} else if payloadType.Kind() == reflect.Struct { // JSONify the payload
+	} else if payloadType.Kind() == reflect.Struct || (payloadType.Kind() == reflect.Ptr && reflect.Indirect(reflect.ValueOf(options.Payload)).Kind() == reflect.Struct) { // JSONify the payload
 		log.Tracef("Payload is a Struct, JSONifying it")
 		// TODO: Add other payload types like XML, etc
 		if len(options.PayloadType) == 0 {
