@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/url"
+	"github.com/pkg/errors"
 )
 
 // Content defines some content
@@ -48,7 +49,7 @@ func ContentWithData(data []byte, options... interface{}) *Content {
 func ContentFromReader(reader io.Reader, options... interface{}) (*Content, error) {
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	return ContentWithData(data, options...), nil
 }
