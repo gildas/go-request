@@ -6,7 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/url"
-	"github.com/pkg/errors"
+	"github.com/gildas/go-errors"
 )
 
 // Content defines some content
@@ -62,7 +62,7 @@ func (reader ContentReader) ReadContent(options... interface{}) (*Content, error
 // UnmarshalContentJSON reads the content of an I/O reader and unmarshals it into JSON
 func (reader ContentReader) UnmarshalContentJSON(v interface{}) (err error) {
 	content, err := reader.ReadContent()
-	if err != nil { return err }
+	if err != nil { return errors.JSONUnmarshalError.Wrap(err) }
 	return json.Unmarshal(content.Data, &v)
 }
 

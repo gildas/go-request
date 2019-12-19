@@ -18,9 +18,9 @@ import (
 	"time"
 
 	"github.com/gildas/go-core"
+	"github.com/gildas/go-errors"
 	"github.com/gildas/go-logger"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 )
 
 // Options defines options of an HTTP request
@@ -77,7 +77,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		options.Context = context.Background()
 	}
 	if options.URL == nil {
-		return nil, errors.New("error.url.empty")
+		return nil, errors.ArgumentMissingError.WithWhat("URL")
 	}
 	if len(options.RequestID) == 0 {
 		options.RequestID = uuid.Must(uuid.NewRandom()).String()
