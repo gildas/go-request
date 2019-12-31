@@ -141,7 +141,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		options.URL.RawQuery = query.Encode()
 	}
 
-	req, err := http.NewRequest(options.Method, options.URL.String(), reqContent.Reader)
+	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reqContent.Reader)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
