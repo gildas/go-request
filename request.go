@@ -222,7 +222,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		}
 
 		if res.StatusCode >= 400 {
-			return resContent.Reader(), errors.WithStack(Error{res.StatusCode, res.Status})
+			return resContent.Reader(), errors.FromHTTPStatusCode(res.StatusCode)
 		}
 
 		// Processing the status
