@@ -3,8 +3,12 @@ module github.com/gildas/go-request
 go 1.13
 
 require (
-	github.com/gildas/go-core v0.0.0-20191124223829-4860e822c795
-	github.com/gildas/go-logger v0.0.0-20191124143503-cbc0f0c82ab7
+	github.com/gildas/go-core v0.4.1
+	github.com/gildas/go-errors v0.0.0
+	github.com/gildas/go-logger v1.3.0
 	github.com/google/uuid v1.1.1
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.8.2-0.20191109102316-7f95ac13edff
+	github.com/stretchr/testify v1.4.0
 )
+
+replace github.com/gildas/go-errors v0.0.0 => ../go-errors

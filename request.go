@@ -18,9 +18,9 @@ import (
 	"time"
 
 	"github.com/gildas/go-core"
+	"github.com/gildas/go-errors"
 	"github.com/gildas/go-logger"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 )
 
 // Options defines options of an HTTP request
@@ -77,7 +77,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		options.Context = context.Background()
 	}
 	if options.URL == nil {
-		return nil, errors.New("error.url.empty")
+		return nil, errors.ArgumentMissingError.WithWhat("URL")
 	}
 	if len(options.RequestID) == 0 {
 		options.RequestID = uuid.Must(uuid.NewRandom()).String()
@@ -175,7 +175,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 	}
 	// Sending the request...
 	for attempt := 0; attempt < options.Attempts; attempt++ {
-		log.Debugf("HTTP %s %s #%d/%d", req.Method, req.URL.String(), attempt, options.Attempts)
+		log.Tracef("HTTP %s %s #%d/%d", req.Method, req.URL.String(), attempt, options.Attempts)
 		log.Tracef("Request Headers: %#v", req.Header)
 		start    := time.Now()
 		res, err := httpclient.Do(req)
@@ -187,7 +187,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 			continue
 		}
 		defer res.Body.Close()
-		log.Debugf("Response %s in %s", res.Status, duration)
+		log.Tracef("Response %s in %s", res.Status, duration)
 		log.Tracef("Response Headers: %#v", res.Header)
 
 		// Reading the response body
@@ -222,8 +222,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		}
 
 		if res.StatusCode >= 400 {
-			log.Debugf("Status: %s (Code %d)", res.Status, res.StatusCode)
-			return resContent.Reader(), errors.WithStack(Error{res.StatusCode, res.Status})
+			return resContent.Reader(), errors.FromHTTPStatusCode(res.StatusCode)
 		}
 
 		// Processing the status
