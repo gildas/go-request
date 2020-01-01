@@ -115,3 +115,32 @@ func TestContentCanUnmarshallData(t *testing.T) {
 	require.Nil(t, err, "Content failed unmarshaling, err=%+v", err)
 	assert.Equal(t, data.ID, value.ID)
 }
+
+func TestContentReaderShouldHaveSamePropertiesAsContent(t *testing.T) {
+	data := []byte{1, 2, 3, 4, 5}
+	content := request.ContentWithData(data)
+	require.NotNil(t, content, "Content should not be nil")
+	content.Type = "image/png"
+
+	reader := content.Reader()
+	require.NotNil(t, reader, "ContentReader should not be nil")
+	assert.Equal(t, content.Type, reader.Type, "ContentReader does not have the same type as the Content")
+	assert.Equal(t, content.Length, reader.Length, "ContentReader does not have the same length as the Content")
+}
+
+func TestContentShouldHaveSamePropertiesAsContentReader(t *testing.T) {
+	data := []byte{1, 2, 3, 4, 5}
+	content := request.ContentWithData(data)
+	require.NotNil(t, content, "Content should not be nil")
+	content.Type = "image/png"
+
+	reader := content.Reader()
+	require.NotNil(t, reader, "ContentReader should not be nil")
+	assert.Equal(t, content.Type, reader.Type, "ContentReader does not have the same type as the Content")
+	assert.Equal(t, content.Length, reader.Length, "ContentReader does not have the same length as the Content")
+
+	another, err := reader.ReadContent()
+	require.Nil(t, err, "Failed to create Content, err=%+v", err)
+	assert.Equal(t, reader.Type, another.Type, "Content does not have the same type as the ContentReader")
+	assert.Equal(t, reader.Length, another.Length, "Content does not have the same length as the ContentReader")
+}
