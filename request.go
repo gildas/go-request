@@ -226,17 +226,9 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 			log.Tracef("Response body: %s, %d bytes", resContent.Type, resContent.Length)
 		}
 
+		// Processing the status
 		if res.StatusCode >= 400 {
 			return resContent.Reader(), errors.FromHTTPStatusCode(res.StatusCode)
-		}
-
-		// Processing the status
-		if res.StatusCode == http.StatusFound {
-			// TODO: Handle redirections
-			follow, err := res.Location()
-			if err == nil {
-				log.Warnf("TODO: we should get stuff from %s", follow.String())
-			}
 		}
 
 		// Unmarshaling the response content if requested
