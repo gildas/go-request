@@ -198,8 +198,8 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		// Reading the response body
 		resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0))
 		if err != nil {
-			log.Errorf("Failed to read response body", err)
-			return nil, err // err is already an errors.Error thanls to ContentReader
+			log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
+			return nil, err // err is already "decorated" by ContentReader
 		}
 		// some servers give the wrong mime type for JPEG files
 		if resContent.Type == "image/jpg" {
