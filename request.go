@@ -73,6 +73,8 @@ func (err Error) Error() string {
 
 // SendRequest sends an HTTP request
 func Send(options *Options, results interface{}) (*ContentReader, error) {
+	var err error
+
 	if options.Context == nil {
 		options.Context = context.Background()
 	}
@@ -182,8 +184,11 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		duration := time.Since(start)
 		log      = log.Record("duration", duration)
 		if err != nil {
-			log.Errorf("Failed to send request, waiting for %s before trying again", options.InterAttemptDelay, err)
-			time.Sleep(options.InterAttemptDelay)
+			log.Errorf("Failed to send request", err)
+			if attempt + 1 < options.Attempts {
+				log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
+				time.Sleep(options.InterAttemptDelay)
+			}
 			continue
 		}
 		defer res.Body.Close()
@@ -244,7 +249,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		return resContent.Reader(), nil
 	}
 	// If we get here, there is an error
-	return nil, errors.Wrapf(err, "Giving up after %d attempts", options.Attempts)
+	return nil, errors.Wrapf(errors.HTTPStatusRequestTimeoutError, "Giving up after %d attempts", options.Attempts)
 }
 
 // buildRequestContent builds a Content for the request
