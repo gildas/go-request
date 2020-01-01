@@ -56,6 +56,8 @@ func ContentFromReader(reader io.Reader, options... interface{}) (*Content, erro
 
 // ReadContent instantiates a Content from an I/O reader
 func (reader ContentReader) ReadContent(options... interface{}) (*Content, error) {
+	options = append(options, reader.Type)
+	options = append(options, reader.Length)
 	return ContentFromReader(reader, options...)
 }
 
