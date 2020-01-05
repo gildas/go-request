@@ -330,7 +330,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		} else {
 			keyType   := payloadType.Key()
 			valueType := payloadType.Elem()
-			return nil, errors.Errorf("Unsupported Payload map (map[%s]%s)", keyType.String(), valueType.String())
+			return nil, errors.ArgumentInvalidError.WithWhatAndValue("Payload Type", fmt.Sprintf("map[%s]%s", keyType.String(), valueType.String()))
 		}
 
 		// Build the content as a Form or a Multipart Data Form
