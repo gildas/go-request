@@ -50,16 +50,16 @@ type Options struct {
 // DefaultAttempts defines the number of attempts for requests by default
 const DefaultAttempts = 5
 
-// DefaultTimeout defunes the timeout for a request
+// DefaultTimeout defines the timeout for a request
 const DefaultTimeout  = 2 * time.Second
 
 // DefaultInterAttemptDelay defines the sleep delay between 2 attempts
 const DefaultInterAttemptDelay = 1 * time.Second
 
-// DefaultRequestBodyLogSize  defines the maximum size of the request body that should be logge
+// DefaultRequestBodyLogSize  defines the maximum size of the request body that should be logged
 const DefaultRequestBodyLogSize = 2048
 
-// DefaultResponseBodyLogSize  defines the maximum size of the response body that should be logge
+// DefaultResponseBodyLogSize  defines the maximum size of the response body that should be logged
 const DefaultResponseBodyLogSize = 2048
 
 // Send sends an HTTP request
