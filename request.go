@@ -46,12 +46,6 @@ type Options struct {
 	Logger              *logger.Logger
 }
 
-// Error is returned when an HTTP Status is >= 400
-type Error struct {
-	StatusCode int    `json:"statusCode"`
-	Status     string `json:"status"`
-}
-
 // DefaultAttempts defines the number of attempts for requests by default
 const DefaultAttempts = 5
 
@@ -66,10 +60,6 @@ const DefaultRequestBodyLogSize = 2048
 
 // DefaultResponseBodyLogSize  defines the maximum size of the response body that should be logge
 const DefaultResponseBodyLogSize = 2048
-
-func (err Error) Error() string {
-	return err.Status
-}
 
 // Send sends an HTTP request
 func Send(options *Options, results interface{}) (*ContentReader, error) {
