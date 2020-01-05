@@ -312,15 +312,15 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		if stringMap, ok := options.Payload.(map[string]string); ok {
 			log.Tracef("Payload is a StringMap")
 			attributes = stringMap
-		} else if stringerMap, ok := options.Payload.(map[string]fmt.Stringer); ok {
-			log.Tracef("Payload is a StringerMap")
-			for key, value := range stringerMap {
-				attributes[key] = value.String()
+		} else { // traverse the map, collecting values if they are Stringer. Note: This can be slow...
+			log.Tracef("Payload is a Map")
+			items := reflect.ValueOf(options.Payload)
+			for _, item := range items.MapKeys() {
+				value := items.MapIndex(item)
+				if stringer, ok := value.Interface().(fmt.Stringer); ok {
+					attributes[item.String()] = stringer.String()
+				}
 			}
-		} else {
-			keyType   := payloadType.Key()
-			valueType := payloadType.Elem()
-			return nil, errors.ArgumentInvalidError.WithWhatAndValue("Payload Type", fmt.Sprintf("map[%s]%s", keyType.String(), valueType.String()))
 		}
 
 		// Build the content as a Form or a Multipart Data Form
