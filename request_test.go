@@ -1,6 +1,7 @@
 package request_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -55,12 +56,12 @@ func (suite *RequestSuite) TestCanSendRequestWithURL() {
 
 func (suite *RequestSuite) TestCanSendRequestWithProxy() {
 	serverURL, _ := url.Parse(suite.Server.URL)
-	proxyURL, _  := url.Parse(suite.Proxy.URL)
+	proxyURL, _ := url.Parse(suite.Proxy.URL)
 	reader, err := request.Send(&request.Options{
-		URL:    serverURL,
-		Proxy:  proxyURL,
+		URL:      serverURL,
+		Proxy:    proxyURL,
 		Attempts: 1,
-		Logger: suite.Logger,
+		Logger:   suite.Logger,
 	}, nil)
 	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
 	suite.Require().NotNil(reader, "Content Reader should not be nil")
@@ -154,10 +155,10 @@ func (suite *RequestSuite) TestCanSendRequestWithStructPayload() {
 func (suite *RequestSuite) TestCanSendRequestWithStructPayloadAndNoReqLogSize() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	reader, err := request.Send(&request.Options{
-		URL:     serverURL,
-		Payload: struct{ ID string }{ID: "1234"},
-		RequestBodyLogSize:  -1,
-		Logger:  suite.Logger,
+		URL:                serverURL,
+		Payload:            struct{ ID string }{ID: "1234"},
+		RequestBodyLogSize: -1,
+		Logger:             suite.Logger,
 	}, nil)
 	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
 	suite.Require().NotNil(reader, "Content Reader should not be nil")
@@ -183,12 +184,15 @@ func (suite *RequestSuite) TestCanSendRequestWithStringMapPayload() {
 }
 
 func (suite *RequestSuite) TestCanSendRequestWithStringerMapPayload() {
+	i := Integer(1234)
+	var z interface{} = i
+	suite.Require().NotNil(z.(fmt.Stringer), "Integer type is not a Stringer")
 	serverURL, _ := url.Parse(suite.Server.URL)
 	reader, err := request.Send(&request.Options{
-		URL:     serverURL,
-		Payload: map[string]Integer{"ID": Integer(1234)},
-		RequestBodyLogSize:  -1,
-		Logger:  suite.Logger,
+		URL:                serverURL,
+		Payload:            map[string]Integer{"ID": Integer(1234)},
+		RequestBodyLogSize: -1,
+		Logger:             suite.Logger,
 	}, nil)
 	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
 	suite.Require().NotNil(reader, "Content Reader should not be nil")
@@ -201,10 +205,10 @@ func (suite *RequestSuite) TestCanSendRequestWithStringerMapPayload() {
 func (suite *RequestSuite) TestShouldFailSendingWithUnsupportedMapPayload() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	_, err := request.Send(&request.Options{
-		URL:     serverURL,
-		Payload: map[string]int{"ID": 1234},
-		RequestBodyLogSize:  -1,
-		Logger:  suite.Logger,
+		URL:                serverURL,
+		Payload:            map[string]int{"ID": 1234},
+		RequestBodyLogSize: -1,
+		Logger:             suite.Logger,
 	}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
 	suite.Assert().True(errors.Is(err, errors.ArgumentInvalidError), "error should be an Argument Invalid error, error: %+v", err)
@@ -219,12 +223,12 @@ func (suite *RequestSuite) TestCanSendRequestWithSlicePayload() {
 	serverURL, _ = serverURL.Parse("/items")
 	reader, err := request.Send(&request.Options{
 		Method: http.MethodDelete,
-		URL:     serverURL,
-		Payload: []struct{ID string}{
-			{ ID: "1234" },
-			{ ID: "5678" },
+		URL:    serverURL,
+		Payload: []struct{ ID string }{
+			{ID: "1234"},
+			{ID: "5678"},
 		},
-		Logger:  suite.Logger,
+		Logger: suite.Logger,
 	}, nil)
 	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
 	suite.Require().NotNil(reader, "Content Reader should not be nil")
@@ -239,13 +243,13 @@ func (suite *RequestSuite) TestCanSendRequestWithSlicePayloadAndNoReqLogSize() {
 	serverURL, _ = serverURL.Parse("/items")
 	reader, err := request.Send(&request.Options{
 		Method: http.MethodDelete,
-		URL:     serverURL,
-		Payload: []struct{ID string}{
-			{ ID: "1234" },
-			{ ID: "5678" },
+		URL:    serverURL,
+		Payload: []struct{ ID string }{
+			{ID: "1234"},
+			{ID: "5678"},
 		},
-		RequestBodyLogSize:  -1,
-		Logger:  suite.Logger,
+		RequestBodyLogSize: -1,
+		Logger:             suite.Logger,
 	}, nil)
 	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
 	suite.Require().NotNil(reader, "Content Reader should not be nil")
@@ -424,8 +428,8 @@ func (suite *RequestSuite) TestShouldFailReceivingBadResponse() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/bad_response")
 	_, err := request.Send(&request.Options{
-		URL:      serverURL,
-		Logger:   suite.Logger,
+		URL:    serverURL,
+		Logger: suite.Logger,
 	}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
 	suite.Assert().Contains(err.Error(), "unexpected EOF")
