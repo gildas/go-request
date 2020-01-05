@@ -2,6 +2,7 @@ package request_test
 
 import (
 	"bytes"
+	"io/ioutil"
 	"encoding/json"
 	"github.com/gildas/go-request"
 	"github.com/gildas/go-errors"
@@ -70,8 +71,11 @@ type failingReader int
 func (r failingReader) Read(data []byte) (int, error) {
 	return 0, errors.NotImplementedError.New()
 }
+func (r failingReader)Close() error {
+	return nil
+}
 
-func TestShouldFailCreateContentFromNilReader(t *testing.T) {
+func TestShouldFailCreateContentFromBogusReader(t *testing.T) {
 	data := failingReader(0)
 	_, err := request.ContentFromReader(data)
 	require.NotNil(t, err, "Should fail create content")
@@ -104,7 +108,7 @@ func TestCanReadFromContentReader(t *testing.T) {
 type stuff struct {
 	ID string
 }
-func TestContentCanUnmarshallData(t *testing.T) {
+func TestContentReaderCanUnmarshallData(t *testing.T) {
 	data := stuff{"12345"}
 	payload, _ := json.Marshal(data)
 	content := request.ContentWithData(payload)
@@ -114,6 +118,25 @@ func TestContentCanUnmarshallData(t *testing.T) {
 	err := content.Reader().UnmarshalContentJSON(&value)
 	require.Nil(t, err, "Content failed unmarshaling, err=%+v", err)
 	assert.Equal(t, data.ID, value.ID)
+}
+
+func TestShouldFailUnmarshallContentReaderWithBogusReader(t *testing.T) {
+	reader := request.ContentReader{"application/json", 0, failingReader(0)}
+	data := stuff{}
+	err := reader.UnmarshalContentJSON(&data)
+	require.NotNil(t, err, "Should fail unmarshal content")
+	assert.Contains(t, err.Error(), "Not Implemented")
+}
+
+func TestShouldFailUnmarshallContentReaderWithBogusData(t *testing.T) {
+	reader := request.ContentReader{"application/json", 0, ioutil.NopCloser(bytes.NewBufferString(`{"ID": 1234}`))}
+	data := stuff{}
+	err := reader.UnmarshalContentJSON(&data)
+	require.NotNil(t, err, "Should fail unmarshal content")
+	assert.Truef(t, errors.Is(err, errors.JSONUnmarshalError), "Error should be a JSON Unmarshal Error")
+	var details *errors.Error
+	require.True(t, errors.As(err, &details), "Error chain should contain an errors.Error")
+	assert.Equal(t, "error.json.unmarshal", details.ID, "Error's ID is wrong (%s)", details.ID)
 }
 
 func TestContentReaderShouldHaveSamePropertiesAsContent(t *testing.T) {
