@@ -67,14 +67,6 @@ func TestCanCreateContentFromContentReader(t *testing.T) {
 	require.Equal(t, another, content)
 }
 
-type failingReader int
-func (r failingReader) Read(data []byte) (int, error) {
-	return 0, errors.NotImplementedError.New()
-}
-func (r failingReader)Close() error {
-	return nil
-}
-
 func TestShouldFailCreateContentFromBogusReader(t *testing.T) {
 	data := failingReader(0)
 	_, err := request.ContentFromReader(data)
@@ -105,9 +97,6 @@ func TestCanReadFromContentReader(t *testing.T) {
 	assert.Equal(t, data[0], content.Data[0])
 }
 
-type stuff struct {
-	ID string
-}
 func TestContentReaderCanUnmarshallData(t *testing.T) {
 	data := stuff{"12345"}
 	payload, _ := json.Marshal(data)

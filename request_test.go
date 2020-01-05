@@ -1,7 +1,6 @@
 package request_test
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -184,13 +183,10 @@ func (suite *RequestSuite) TestCanSendRequestWithStringMapPayload() {
 }
 
 func (suite *RequestSuite) TestCanSendRequestWithStringerMapPayload() {
-	i := Integer(1234)
-	var z interface{} = i
-	suite.Require().NotNil(z.(fmt.Stringer), "Integer type is not a Stringer")
 	serverURL, _ := url.Parse(suite.Server.URL)
 	reader, err := request.Send(&request.Options{
 		URL:                serverURL,
-		Payload:            map[string]Integer{"ID": Integer(1234)},
+		Payload:            map[string]stuff{"ID": stuff{"1234"}},
 		RequestBodyLogSize: -1,
 		Logger:             suite.Logger,
 	}, nil)

@@ -11,12 +11,6 @@ import (
 	"github.com/gildas/go-core"
 )
 
-type Integer int
-
-func (i Integer)String() string {
-	return fmt.Sprintf("%d", i)
-}
-
 func CreateTestServer(suite *RequestSuite) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		log := suite.Logger.Child("server", "handler")
