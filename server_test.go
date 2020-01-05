@@ -2,10 +2,20 @@ package request_test
 
 import (
 	"net/http"
+	"fmt"
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"time"
+	"github.com/gildas/go-request"
+	"github.com/gildas/go-core"
 )
+
+type Integer int
+
+func (i Integer)String() string {
+	return fmt.Sprintf("%d", i)
+}
 
 func CreateTestServer(suite *RequestSuite) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
@@ -74,6 +84,33 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				}
 			case "/timeout":
 				time.Sleep(5 * time.Second)
+			default:
+				res.WriteHeader(http.StatusNotFound)
+				if _, err := res.Write([]byte("{}")); err != nil {
+					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+				}
+				return
+			}
+		case http.MethodDelete:
+			switch req.URL.Path {
+			case "/items":
+				items := []struct{ID string}{}
+				defer req.Body.Close()
+				reqContent, err := request.ContentFromReader(req.Body, req.Header.Get("Content-Type"))
+				if err != nil {
+					log.Errorf("Failed to read request content", err)
+					core.RespondWithError(res, http.StatusBadRequest, err)
+					return
+				}
+				if err = json.Unmarshal(reqContent.Data, &items); err != nil {
+					log.Errorf("Failed to read request content", err)
+					core.RespondWithError(res, http.StatusBadRequest, err)
+					return
+				}
+				log.Infof("Deleting #%d items", len(items))
+				if _, err := res.Write([]byte(fmt.Sprintf("%d", len(items)))); err != nil {
+					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+				}
 			default:
 				res.WriteHeader(http.StatusNotFound)
 				if _, err := res.Write([]byte("{}")); err != nil {

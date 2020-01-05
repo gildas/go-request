@@ -136,7 +136,7 @@ func (suite *RequestSuite) TestCanSendRequestWithQueryParameters() {
 	suite.Assert().Equal("body", string(content.Data))
 }
 
-func (suite *RequestSuite) TestCanSendRequestWithPayload() {
+func (suite *RequestSuite) TestCanSendRequestWithStructPayload() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	reader, err := request.Send(&request.Options{
 		URL:     serverURL,
@@ -149,6 +149,110 @@ func (suite *RequestSuite) TestCanSendRequestWithPayload() {
 	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
 	suite.Require().NotNil(content, "Content should not be nil")
 	suite.Assert().Equal("body", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithStructPayloadAndNoReqLogSize() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	reader, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: struct{ ID string }{ID: "1234"},
+		RequestBodyLogSize:  -1,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("body", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithStringMapPayload() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	reader, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: map[string]string{"ID": "1234"},
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("body", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithStringerMapPayload() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	reader, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: map[string]Integer{"ID": Integer(1234)},
+		RequestBodyLogSize:  -1,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("body", string(content.Data))
+}
+
+func (suite *RequestSuite) TestShouldFailSendingWithUnsupportedMapPayload() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	_, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: map[string]int{"ID": 1234},
+		RequestBodyLogSize:  -1,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Assert().True(errors.Is(err, errors.ArgumentInvalidError), "error should be an Argument Invalid error, error: %+v", err)
+	var details *errors.Error
+	suite.Require().True(errors.As(err, &details), "Error chain should contain an errors.Error")
+	suite.Assert().Equal("Payload Type", details.What, "Error's What is wrong")
+	suite.Assert().Equal("map[string]int", details.Value.(string), "Error's What is wrong")
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithSlicePayload() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/items")
+	reader, err := request.Send(&request.Options{
+		Method: http.MethodDelete,
+		URL:     serverURL,
+		Payload: []struct{ID string}{
+			{ ID: "1234" },
+			{ ID: "5678" },
+		},
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("2", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithSlicePayloadAndNoReqLogSize() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/items")
+	reader, err := request.Send(&request.Options{
+		Method: http.MethodDelete,
+		URL:     serverURL,
+		Payload: []struct{ID string}{
+			{ ID: "1234" },
+			{ ID: "5678" },
+		},
+		RequestBodyLogSize:  -1,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("2", string(content.Data))
 }
 
 func (suite *RequestSuite) TestCanSendRequestWithResults() {
