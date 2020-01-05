@@ -71,7 +71,7 @@ func (err Error) Error() string {
 	return err.Status
 }
 
-// SendRequest sends an HTTP request
+// Send sends an HTTP request
 func Send(options *Options, results interface{}) (*ContentReader, error) {
 	var err error
 
