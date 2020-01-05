@@ -343,6 +343,9 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		for key, value := range attributes {
 			if strings.HasPrefix(key, ">") {
 				key = strings.TrimPrefix(key, ">")
+				if len(key) == 0 {
+					return nil, errors.Errorf("Empty key for multipart form field with attachment")
+				}
 				if len(value) == 0 {
 					return nil, errors.Errorf("Empty value for multipart form field %s", key)
 				}
