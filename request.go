@@ -10,6 +10,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"path/filepath"
 	"reflect"
@@ -345,12 +346,17 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 				if len(value) == 0 {
 					return nil, errors.Errorf("Empty value for multipart form field %s", key)
 				}
-				part, err := writer.CreateFormFile(key, value)
-				if err != nil {
-					return nil, errors.Wrapf(err, "Failed to create multipart for field %s", key)
-				}
 				if options.Attachment.Length == 0 {
 					return nil, errors.Errorf("Missing/Empty Attachment for multipart form field %s", key)
+				}
+				partHeader := textproto.MIMEHeader{}
+				partHeader.Add("Content-Disposition", fmt.Sprintf("form-data; name=\"%s\"; filename=\"%s\"", key, value))
+				if len(options.Attachment.Type) > 0 {
+					partHeader.Add("Content-Type", options.Attachment.Type)
+				}
+				part, err := writer.CreatePart(partHeader)
+				if err != nil {
+					return nil, errors.Wrapf(err, "Failed to create multipart for field %s", key)
 				}
 				written, err := io.Copy(part, options.Attachment)
 				if err != nil {
