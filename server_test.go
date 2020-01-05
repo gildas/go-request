@@ -23,6 +23,115 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 		switch req.Method {
 		case http.MethodPost:
 			switch req.URL.Path {
+			case "/items":
+				items := []stuff{}
+
+				if req.Header.Get("Content-type") == "application/json" {
+					reqContent, err := request.ContentFromReader(req.Body, req.Header.Get("Content-Type"))
+					if err != nil {
+						log.Errorf("Failed to read request content", err)
+						core.RespondWithError(res, http.StatusBadRequest, err)
+						return
+					}
+					log.Infof("Request body: %s, %d bytes: \n%s", reqContent.Type, reqContent.Length, string(reqContent.Data))
+					if err = json.Unmarshal(reqContent.Data, &items); err != nil {
+						log.Errorf("Failed to read request content", err)
+						core.RespondWithError(res, http.StatusBadRequest, err)
+						return
+					}
+					if len(items) < 1 {
+						log.Errorf(("Not enough items to add"))
+						core.RespondWithError(res, http.StatusBadRequest, err)
+						return
+					}
+					log.Infof("Adding #%d items", len(items))
+				} else if req.Header.Get("Content-type") == "application/x-www-form-urlencoded" {
+					err := req.ParseForm()
+					if err != nil {
+						log.Errorf("Failed to parse request as a form", err)
+						core.RespondWithError(res, http.StatusBadRequest, err)
+						return
+					}
+					log.Infof("POST Form: %+#v", req.PostForm)
+					for key, values := range req.PostForm {
+						log.Infof("Form: key=%s, values=%+#v", key, values)
+					}
+					id := req.PostFormValue("ID")
+					if len(id) > 0 {
+						item := stuff{id}
+						log.Infof("Adding %#+v", item)
+						items = append(items, item)
+
+					}
+				}
+
+				if _, err := res.Write([]byte(fmt.Sprintf("%d", len(items)))); err != nil {
+					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+				}
+			case "/item":
+				reqContent, err := request.ContentFromReader(req.Body, req.Header.Get("Content-Type"))
+				if err != nil {
+					log.Errorf("Failed to read request content", err)
+					core.RespondWithError(res, http.StatusBadRequest, err)
+					return
+				}
+				log.Infof("Request body: %s, %d bytes: \n%s", reqContent.Type, reqContent.Length, string(reqContent.Data))
+				if reqContent.Length == 0 {
+					log.Errorf("Content is empty")
+					core.RespondWithError(res, http.StatusBadRequest, err)
+					return
+				}
+				item := struct{ID string}{}
+				if err = json.Unmarshal(reqContent.Data, &item); err != nil {
+					log.Errorf("Failed to read request content", err)
+					core.RespondWithError(res, http.StatusBadRequest, err)
+					return
+				}
+				if _, err := res.Write([]byte(item.ID)); err != nil {
+					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+				}
+			case "/image":
+				items := []stuff{}
+				if strings.HasPrefix(req.Header.Get("Content-Type"), "multipart/form-data") {
+					err := req.ParseMultipartForm(int64(1024))
+					if err != nil {
+						log.Errorf("Failed to parse request as a multipart form", err)
+						core.RespondWithError(res, http.StatusBadRequest, err)
+						return
+					}
+					log.Infof("POST Form: %+#v", req.PostForm)
+					for key, values := range req.PostForm {
+						log.Infof("Form: key=%s, values=%+#v", key, values)
+					}
+					id := req.PostFormValue("ID")
+					if len(id) > 0 {
+						item := stuff{id}
+						log.Infof("Adding %#+v", item)
+						items = append(items, item)
+
+					}
+					_, fileHeader, err := req.FormFile("file")
+					if err != nil {
+						log.Errorf("Failed to read file from multipart form", err)
+						core.RespondWithError(res, http.StatusBadRequest, err)
+						return
+					}
+					log.Infof("File %s: mime=%s, size=%d", fileHeader.Filename, fileHeader.Header.Get("Content-Type"), fileHeader.Size)
+					log.Debugf("File header=%s", fileHeader.Header)
+					if fileHeader.Header.Get("Content-Type") != "image/png" {
+						log.Errorf("Attachment is not a PNG image")
+						core.RespondWithError(res, http.StatusBadRequest, err)
+						return
+					}
+					if fileHeader.Size == 0 {
+						log.Errorf("Attachment is empty")
+						core.RespondWithError(res, http.StatusBadRequest, err)
+						return
+					}
+				}
+				if _, err := res.Write([]byte(fmt.Sprintf("%d", len(items)))); err != nil {
+					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+				}
 			case "/redirect":
 				res.Header().Add("Location", "/")
 				res.WriteHeader(http.StatusSeeOther)
@@ -86,16 +195,17 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				return
 			}
 		case http.MethodDelete:
+			defer req.Body.Close()
+			reqContent, err := request.ContentFromReader(req.Body, req.Header.Get("Content-Type"))
+			if err != nil {
+				log.Errorf("Failed to read request content", err)
+				core.RespondWithError(res, http.StatusBadRequest, err)
+				return
+			}
+			log.Infof("Request body: %s, %d bytes: \n%s", reqContent.Type, reqContent.Length, string(reqContent.Data))
 			switch req.URL.Path {
 			case "/items":
 				items := []struct{ID string}{}
-				defer req.Body.Close()
-				reqContent, err := request.ContentFromReader(req.Body, req.Header.Get("Content-Type"))
-				if err != nil {
-					log.Errorf("Failed to read request content", err)
-					core.RespondWithError(res, http.StatusBadRequest, err)
-					return
-				}
 				if err = json.Unmarshal(reqContent.Data, &items); err != nil {
 					log.Errorf("Failed to read request content", err)
 					core.RespondWithError(res, http.StatusBadRequest, err)

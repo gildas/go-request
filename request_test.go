@@ -2,6 +2,9 @@ package request_test
 
 import (
 	"net/http"
+	"io/ioutil"
+	"bytes"
+	"encoding/json"
 	"net/http/httptest"
 	"net/url"
 	"reflect"
@@ -29,7 +32,7 @@ func TestRequestSuite(t *testing.T) {
 
 func (suite *RequestSuite) SetupSuite() {
 	suite.Name = strings.TrimSuffix(reflect.TypeOf(*suite).Name(), "Suite")
-	suite.Logger = logger.Create("test", &logger.FileStream{Path: "./test-request.log", Unbuffered: true}).Child("test", "test")
+	suite.Logger = logger.Create("test", &logger.FileStream{Path: "./test-request.log", Unbuffered: true, FilterLevel: logger.TRACE}).Child("test", "test")
 	suite.Server = CreateTestServer(suite)
 	suite.Proxy = CreateTestProxy(suite)
 }
@@ -136,8 +139,200 @@ func (suite *RequestSuite) TestCanSendRequestWithQueryParameters() {
 	suite.Assert().Equal("body", string(content.Data))
 }
 
+func (suite *RequestSuite) TestCanSendRequestWithContentReaderPayload() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	data := struct{ ID string }{ID: "1234"}
+	payload, _ := json.Marshal(data)
+	payloadReader := request.ContentReader{
+		Type: "application/json",
+		Length: int64(len(payload)),
+		Reader: ioutil.NopCloser(bytes.NewBuffer(payload)),
+	}
+	reader, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: payloadReader,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1234", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithContentReaderPayloadAndNoLength() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	data := struct{ ID string }{ID: "1234"}
+	payload, _ := json.Marshal(data)
+	payloadReader := request.ContentReader{
+		Type: "application/json",
+		Reader: ioutil.NopCloser(bytes.NewBuffer(payload)),
+	}
+	reader, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: payloadReader,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1234", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithContentReaderPayloadAndNoType() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	data := struct{ ID string }{ID: "1234"}
+	payload, _ := json.Marshal(data)
+	payloadReader := request.ContentReader{
+		Length: int64(len(payload)),
+		Reader: ioutil.NopCloser(bytes.NewBuffer(payload)),
+	}
+	reader, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: payloadReader,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1234", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithContentReaderPointerPayload() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	data := struct{ ID string }{ID: "1234"}
+	payload, _ := json.Marshal(data)
+	payloadReader := &request.ContentReader{
+		Type: "application/json",
+		Length: int64(len(payload)),
+		Reader: ioutil.NopCloser(bytes.NewBuffer(payload)),
+	}
+	reader, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: payloadReader,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1234", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithContentReaderPointerPayloadAndNoLength() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	data := struct{ ID string }{ID: "1234"}
+	payload, _ := json.Marshal(data)
+	payloadReader := &request.ContentReader{
+		Type: "application/json",
+		Reader: ioutil.NopCloser(bytes.NewBuffer(payload)),
+	}
+	reader, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: payloadReader,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1234", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithContentReaderPointerPayloadAndNoType() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	data := struct{ ID string }{ID: "1234"}
+	payload, _ := json.Marshal(data)
+	payloadReader := &request.ContentReader{
+		Length: int64(len(payload)),
+		Reader: ioutil.NopCloser(bytes.NewBuffer(payload)),
+	}
+	reader, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: payloadReader,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1234", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithContentPayload() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	data := struct{ ID string }{ID: "1234"}
+	payload, _ := json.Marshal(data)
+	payloadContent := request.ContentWithData(payload, "application/json")
+	reader, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: *payloadContent,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1234", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithContentPointerPayload() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	data := struct{ ID string }{ID: "1234"}
+	payload, _ := json.Marshal(data)
+	payloadContent := request.ContentWithData(payload, "application/json")
+	reader, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: payloadContent,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1234", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithAttachmentAsPayload() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	data := struct{ ID string }{ID: "1234"}
+	payload, _ := json.Marshal(data)
+	payloadContent := request.ContentWithData(payload, "application/json")
+	reader, err := request.Send(&request.Options{
+		URL:        serverURL,
+		Attachment: payloadContent.Reader(),
+		Logger:     suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1234", string(content.Data))
+}
+
 func (suite *RequestSuite) TestCanSendRequestWithStructPayload() {
 	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
 	reader, err := request.Send(&request.Options{
 		URL:     serverURL,
 		Payload: struct{ ID string }{ID: "1234"},
@@ -148,11 +343,12 @@ func (suite *RequestSuite) TestCanSendRequestWithStructPayload() {
 	content, err := reader.ReadContent()
 	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal("body", string(content.Data))
+	suite.Assert().Equal("1234", string(content.Data))
 }
 
 func (suite *RequestSuite) TestCanSendRequestWithStructPayloadAndNoReqLogSize() {
 	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
 	reader, err := request.Send(&request.Options{
 		URL:                serverURL,
 		Payload:            struct{ ID string }{ID: "1234"},
@@ -164,11 +360,12 @@ func (suite *RequestSuite) TestCanSendRequestWithStructPayloadAndNoReqLogSize() 
 	content, err := reader.ReadContent()
 	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal("body", string(content.Data))
+	suite.Assert().Equal("1234", string(content.Data))
 }
 
 func (suite *RequestSuite) TestCanSendRequestWithStringMapPayload() {
 	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/items")
 	reader, err := request.Send(&request.Options{
 		URL:     serverURL,
 		Payload: map[string]string{"ID": "1234"},
@@ -179,11 +376,12 @@ func (suite *RequestSuite) TestCanSendRequestWithStringMapPayload() {
 	content, err := reader.ReadContent()
 	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal("body", string(content.Data))
+	suite.Assert().Equal("1", string(content.Data))
 }
 
-func (suite *RequestSuite) TestCanSendRequestWithStringerMapPayload() {
+func (suite *RequestSuite) TestCanSendRequestWithMapPayload() {
 	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/items")
 	reader, err := request.Send(&request.Options{
 		URL:                serverURL,
 		Payload:            map[string]stuff{"ID": stuff{"1234"}},
@@ -195,23 +393,26 @@ func (suite *RequestSuite) TestCanSendRequestWithStringerMapPayload() {
 	content, err := reader.ReadContent()
 	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal("body", string(content.Data))
+	suite.Assert().Equal("1", string(content.Data))
 }
 
-func (suite *RequestSuite) TestShouldFailSendingWithUnsupportedMapPayload() {
+func (suite *RequestSuite) TestCanSendRequestWithStringMapPayloadAndAttachment() {
+	attachment := request.ContentWithData(smallPNG(), "image/png")
+	suite.Require().Equal("image/png", attachment.Type, "Attachment type is wrong")
 	serverURL, _ := url.Parse(suite.Server.URL)
-	_, err := request.Send(&request.Options{
-		URL:                serverURL,
-		Payload:            map[string]int{"ID": 1234},
-		RequestBodyLogSize: -1,
-		Logger:             suite.Logger,
+	serverURL, _ = serverURL.Parse("/image")
+	reader, err := request.Send(&request.Options{
+		URL:        serverURL,
+		Payload:    map[string]string{"ID": "1234", ">file": "image.png"},
+		Attachment: attachment.Reader(),
+		Logger:     suite.Logger,
 	}, nil)
-	suite.Require().NotNil(err, "Should have failed sending request")
-	suite.Assert().True(errors.Is(err, errors.ArgumentInvalidError), "error should be an Argument Invalid error, error: %+v", err)
-	var details *errors.Error
-	suite.Require().True(errors.As(err, &details), "Error chain should contain an errors.Error")
-	suite.Assert().Equal("Payload Type", details.What, "Error's What is wrong")
-	suite.Assert().Equal("map[string]int", details.Value.(string), "Error's What is wrong")
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1", string(content.Data))
 }
 
 func (suite *RequestSuite) TestCanSendRequestWithSlicePayload() {
@@ -334,6 +535,81 @@ func (suite *RequestSuite) TestShouldFailSendingWithInvalidMethod() {
 	}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
 	suite.Assert().Contains(err.Error(), "invalid method")
+}
+
+func (suite *RequestSuite) TestShouldFailSendingWithUnsupportedPayload() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/items")
+	_, err := request.Send(&request.Options{
+		URL:        serverURL,
+		Payload:    1234,
+		Logger:     suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Assert().Contains(err.Error(), "Unsupported Payload: int")
+}
+
+func (suite *RequestSuite) TestShouldFailSendingWithEmptyAttachment() {
+	attachment := request.ContentWithData([]byte{}, "image/png")
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/items")
+	_, err := request.Send(&request.Options{
+		URL:        serverURL,
+		Payload:    map[string]string{"ID": "1234", ">file": "image.png"},
+		Attachment: attachment.Reader(),
+		Logger:     suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Assert().Contains(err.Error(), "Missing/Empty Attachment")
+}
+
+func (suite *RequestSuite) TestShouldFailSendingWithMissingAttachmentName() {
+	attachment := request.ContentWithData(smallPNG(), "image/png")
+	suite.Require().Equal("image/png", attachment.Type, "Attachment type is wrong")
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/image")
+	_, err := request.Send(&request.Options{
+		URL:        serverURL,
+		Payload:    map[string]string{"ID": "1234", ">file": ""},
+		Attachment: attachment.Reader(),
+		Logger:     suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Assert().Contains(err.Error(), "Empty value for multipart form field")
+}
+
+func (suite *RequestSuite) TestShouldFailSendingWithMissingAttachmentKey() {
+	attachment := request.ContentWithData(smallPNG(), "image/png")
+	suite.Require().Equal("image/png", attachment.Type, "Attachment type is wrong")
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/image")
+	_, err := request.Send(&request.Options{
+		URL:        serverURL,
+		Payload:    map[string]string{"ID": "1234", ">": "image.png"},
+		Attachment: attachment.Reader(),
+		Logger:     suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Assert().Contains(err.Error(), "Empty key for multipart form field")
+}
+
+func (suite *RequestSuite) TestShouldFailSendingWitBogusAttachmentReader() {
+	reader := &request.ContentReader{
+		Type: "image/png",
+		Length: int64(67),
+		Reader: failingReader(0),
+	}
+	suite.Require().Equal("image/png", reader.Type, "Attachment type is wrong")
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/image")
+	_, err := request.Send(&request.Options{
+		URL:        serverURL,
+		Payload:    map[string]string{"ID": "1234", ">file": "image.png"},
+		Attachment: reader,
+		Logger:     suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Assert().Contains(err.Error(), "Failed to write attachment to multipart form field file")
 }
 
 func (suite *RequestSuite) TestCanReceiveJPGType() {
