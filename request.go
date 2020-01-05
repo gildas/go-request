@@ -10,6 +10,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"path/filepath"
 	"reflect"
@@ -46,33 +47,25 @@ type Options struct {
 	Logger              *logger.Logger
 }
 
-// Error is returned when an HTTP Status is >= 400
-type Error struct {
-	StatusCode int    `json:"statusCode"`
-	Status     string `json:"status"`
-}
-
 // DefaultAttempts defines the number of attempts for requests by default
 const DefaultAttempts = 5
 
-// DefaultTimeout defunes the timeout for a request
+// DefaultTimeout defines the timeout for a request
 const DefaultTimeout  = 2 * time.Second
 
 // DefaultInterAttemptDelay defines the sleep delay between 2 attempts
 const DefaultInterAttemptDelay = 1 * time.Second
 
-// DefaultRequestBodyLogSize  defines the maximum size of the request body that should be logge
+// DefaultRequestBodyLogSize  defines the maximum size of the request body that should be logged
 const DefaultRequestBodyLogSize = 2048
 
-// DefaultResponseBodyLogSize  defines the maximum size of the response body that should be logge
+// DefaultResponseBodyLogSize  defines the maximum size of the response body that should be logged
 const DefaultResponseBodyLogSize = 2048
 
-func (err Error) Error() string {
-	return err.Status
-}
-
-// SendRequest sends an HTTP request
+// Send sends an HTTP request
 func Send(options *Options, results interface{}) (*ContentReader, error) {
+	var err error
+
 	if options.Context == nil {
 		options.Context = context.Background()
 	}
@@ -141,7 +134,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		options.URL.RawQuery = query.Encode()
 	}
 
-	req, err := http.NewRequest(options.Method, options.URL.String(), reqContent.Reader)
+	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reqContent.Reader)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -182,8 +175,11 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		duration := time.Since(start)
 		log      = log.Record("duration", duration)
 		if err != nil {
-			log.Errorf("Failed to send request, waiting for %s before trying again", options.InterAttemptDelay, err)
-			time.Sleep(options.InterAttemptDelay)
+			log.Errorf("Failed to send request", err)
+			if attempt + 1 < options.Attempts {
+				log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
+				time.Sleep(options.InterAttemptDelay)
+			}
 			continue
 		}
 		defer res.Body.Close()
@@ -193,8 +189,8 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		// Reading the response body
 		resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0))
 		if err != nil {
-			log.Errorf("Failed to read response body", err)
-			return nil, errors.WithStack(err)
+			log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
+			return nil, err // err is already "decorated" by ContentReader
 		}
 		// some servers give the wrong mime type for JPEG files
 		if resContent.Type == "image/jpg" {
@@ -221,17 +217,9 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 			log.Tracef("Response body: %s, %d bytes", resContent.Type, resContent.Length)
 		}
 
+		// Processing the status
 		if res.StatusCode >= 400 {
 			return resContent.Reader(), errors.FromHTTPStatusCode(res.StatusCode)
-		}
-
-		// Processing the status
-		if res.StatusCode == http.StatusFound {
-			// TODO: Handle redirections
-			follow, err := res.Location()
-			if err == nil {
-				log.Warnf("TODO: we should get stuff from %s", follow.String())
-			}
 		}
 
 		// Unmarshaling the response content if requested
@@ -244,7 +232,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		return resContent.Reader(), nil
 	}
 	// If we get here, there is an error
-	return nil, errors.Wrapf(err, "Giving up after %d attempts", options.Attempts)
+	return nil, errors.Wrapf(errors.HTTPStatusRequestTimeoutError, "Giving up after %d attempts", options.Attempts)
 }
 
 // buildRequestContent builds a Content for the request
@@ -273,19 +261,25 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 			return content.Reader(), nil
 		}
 		return &contentReader, nil
-		/*
-			} else if contentReader, ok := options.Payload.(*ContentReader); ok {
-				log.Tracef("Payload is a *ContentReader (Type: %s, size: %d)", contentReader.Type, contentReader.Length)
-				if contentReader.Length > 0 {
-					content, _ = ContentFromReader(contentReader, contentReader.Type)
-					if len(content.Type) == 0 {
-						content.Type = "application/octet-stream"
-					}
-				} // else the returned contentReader will be empty
-		*/
+	} else if contentReader, ok := options.Payload.(*ContentReader); ok {
+		log.Tracef("Payload is a *ContentReader (Type: %s, size: %d)", contentReader.Type, contentReader.Length)
+		if len(contentReader.Type) == 0 {
+			contentReader.Type = "application/octet-stream"
+		}
+		if contentReader.Length == 0 {
+			// Let's try to get a length from the reader
+			content, err := ContentFromReader(contentReader, contentReader.Type)
+			if err != nil { return nil, err }
+			return content.Reader(), nil
+		}
+		return contentReader, nil
 	} else if content, ok := options.Payload.(Content); ok {
 		// Here we ignore options.PayloadType as the Content embeds its ContentType
 		log.Tracef("Payload is a Content (Type: %s, size: %d)", content.Type, content.Length)
+		return content.Reader(), nil
+	} else if content, ok := options.Payload.(*Content); ok {
+		// Here we ignore options.PayloadType as the Content embeds its ContentType
+		log.Tracef("Payload is a *Content (Type: %s, size: %d)", content.Type, content.Length)
 		return content.Reader(), nil
 	} else if payloadType.Kind() == reflect.Struct || (payloadType.Kind() == reflect.Ptr && reflect.Indirect(reflect.ValueOf(options.Payload)).Kind() == reflect.Struct) { // JSONify the payload
 		log.Tracef("Payload is a Struct, JSONifying it")
@@ -325,15 +319,15 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		if stringMap, ok := options.Payload.(map[string]string); ok {
 			log.Tracef("Payload is a StringMap")
 			attributes = stringMap
-		} else if stringerMap, ok := options.Payload.(map[string]fmt.Stringer); ok {
-			log.Tracef("Payload is a StringerMap")
-			for key, value := range stringerMap {
-				attributes[key] = value.String()
+		} else { // traverse the map, collecting values if they are Stringer. Note: This can be slow...
+			log.Tracef("Payload is a Map")
+			items := reflect.ValueOf(options.Payload)
+			for _, item := range items.MapKeys() {
+				value := items.MapIndex(item)
+				if stringer, ok := value.Interface().(fmt.Stringer); ok {
+					attributes[item.String()] = stringer.String()
+				}
 			}
-		} else {
-			keyType   := payloadType.Key()
-			valueType := payloadType.Elem()
-			return nil, errors.Errorf("Unsupported Payload map (map[%s]%s)", keyType.String(), valueType.String())
 		}
 
 		// Build the content as a Form or a Multipart Data Form
@@ -355,15 +349,23 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		for key, value := range attributes {
 			if strings.HasPrefix(key, ">") {
 				key = strings.TrimPrefix(key, ">")
+				if len(key) == 0 {
+					return nil, errors.Errorf("Empty key for multipart form field with attachment")
+				}
 				if len(value) == 0 {
 					return nil, errors.Errorf("Empty value for multipart form field %s", key)
 				}
-				part, err := writer.CreateFormFile(key, value)
-				if err != nil {
-					return nil, errors.Wrapf(err, "Failed to create multipart for field %s", key)
-				}
 				if options.Attachment.Length == 0 {
 					return nil, errors.Errorf("Missing/Empty Attachment for multipart form field %s", key)
+				}
+				partHeader := textproto.MIMEHeader{}
+				partHeader.Add("Content-Disposition", fmt.Sprintf("form-data; name=\"%s\"; filename=\"%s\"", key, value))
+				if len(options.Attachment.Type) > 0 {
+					partHeader.Add("Content-Type", options.Attachment.Type)
+				}
+				part, err := writer.CreatePart(partHeader)
+				if err != nil {
+					return nil, errors.Wrapf(err, "Failed to create multipart for field %s", key)
 				}
 				written, err := io.Copy(part, options.Attachment)
 				if err != nil {

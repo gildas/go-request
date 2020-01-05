@@ -44,8 +44,22 @@ Authorization can be stored in the `Options.Authorization`:
 payload := struct{Key string}{}
 data := struct{Data string}{}
 _, err := request.Send(&request.Options{
-    URL:     myURL,
-    Authorization: "Basic sdfgsdfgsdfgdsfgw42agoi0s9ix"
+    URL:           myURL,
+    Authorization: request.BasicAuthorization("user", "password"),
+}, &data)
+if err != nil {
+    return err
+}
+```
+
+or, with a Bearer Token:  
+
+```go
+payload := struct{Key string}{}
+data := struct{Data string}{}
+_, err := request.Send(&request.Options{
+    URL:           myURL,
+    Authorization: request.BearerAuthorization("myTokenABCD"),
 }, &data)
 if err != nil {
     return err
@@ -68,10 +82,13 @@ if err != nil {
 
 A payload will induce an HTTP POST unless mentioned.
 
+So, to send an `HTTP PUT`, simply write:
+
 ```go
 payload := struct{Key string}{}
 data := struct{Data string}{}
 _, err := request.Send(&request.Options{
+    Method:  http.MethodPut,
     URL:     myURL,
     Payload: payload,
 }, &data)
@@ -80,25 +97,52 @@ if err != nil {
 }
 ```
 
-So, to send an `HTTP UPDATE`, simply:
+To send an x-www-form, use a `map` in the payload:  
 
 ```go
-payload := struct{Key string}{}
 data := struct{Data string}{}
 _, err := request.Send(&request.Options{
-    Method:  http.MethodUPDAE,
+    Method:  http.MethodPut,
     URL:     myURL,
-    Payload: payload,
+    Payload: map[string]string{
+        "ID":   "1234",
+        "Kind": "stuff,"
+    },
 }, &data)
 if err != nil {
     return err
 }
 ```
 
-if the PayloadType is not mentioned, it is calculated when processing the Payload.
+To send a multipart form with an attachment, use a `map`, an attachment, and one of the key must start with `>`:  
 
-if the payload is a `ContentReader` or a `Content`, it is used directly.
+```go
+attachment := request.ContentWithData(myReadFile(), "image/png")
+data := struct{Data string}{}
+_, err := request.Send(&request.Options{
+    Method:  http.MethodPut,
+    URL:     myURL,
+    Payload: map[string]string{
+        "ID":    "1234",
+        "Kind":  "stuff,"
+        ">file": "image.png",
+    },
+    Attachment: attachment.Reader(),
+}, &data)
+if err != nil {
+    return err
+}
+```
 
-if the payload is a `map[string]string`
+**Notes:**  
+- if the PayloadType is not mentioned, it is calculated when processing the Payload.
+- if the payload is a `ContentReader` or a `Content`, it is used directly.
+- if the payload is a `map[string]xxx` where *xxx* is not `string`, the `fmt.Stringer` is used whenever possible to get the string version of the values.
+- if the payload is a struct or a pointer to struct, the body is sent as `application/json` and marshaled.
+- if the payload is an array or a slice, the body is sent as `application/json` and marshaled.
+- The option `Logger` can be used to let the `request` library log to a `gildas/go-logger`. By default, it logs to a `NilStream` (see github.com/gildas/go-logger).
+- When using a logger, you can control how much of the Request/Response Body is logged with the options `RequestBodyLogSize`/`ResponseBodyLogSize`. By default they are set to 2048 bytes. If you do not want to log them, set the options to *-1*.
 
-if the payload is a struct{}, this func will send the body as `application/json` and will marshal it.
+**TODO**  
+- Support other kinds of `map` in the payload, like `map[string]int`, etc.
+- Maybe have an interface for the Payload to allow users to provide the logic of building the payload themselves. (`type PayloadBuilder interface { BuildPayload() *ContentReader}`?!?)

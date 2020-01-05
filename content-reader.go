@@ -56,14 +56,21 @@ func ContentFromReader(reader io.Reader, options... interface{}) (*Content, erro
 
 // ReadContent instantiates a Content from an I/O reader
 func (reader ContentReader) ReadContent(options... interface{}) (*Content, error) {
+	options = append(options, reader.Type)
+	options = append(options, reader.Length)
 	return ContentFromReader(reader, options...)
 }
 
 // UnmarshalContentJSON reads the content of an I/O reader and unmarshals it into JSON
 func (reader ContentReader) UnmarshalContentJSON(v interface{}) (err error) {
 	content, err := reader.ReadContent()
-	if err != nil { return errors.JSONUnmarshalError.Wrap(err) }
-	return json.Unmarshal(content.Data, &v)
+	if err != nil {
+		return err // err is already decorated by ContentFromReader
+	}
+	if err = json.Unmarshal(content.Data, &v); err != nil {
+		return errors.JSONUnmarshalError.Wrap(err)
+	}
+	return nil
 }
 
 // Reader gets a ContentReader from this Content
