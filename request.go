@@ -261,19 +261,25 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 			return content.Reader(), nil
 		}
 		return &contentReader, nil
-		/*
-			} else if contentReader, ok := options.Payload.(*ContentReader); ok {
-				log.Tracef("Payload is a *ContentReader (Type: %s, size: %d)", contentReader.Type, contentReader.Length)
-				if contentReader.Length > 0 {
-					content, _ = ContentFromReader(contentReader, contentReader.Type)
-					if len(content.Type) == 0 {
-						content.Type = "application/octet-stream"
-					}
-				} // else the returned contentReader will be empty
-		*/
+	} else if contentReader, ok := options.Payload.(*ContentReader); ok {
+		log.Tracef("Payload is a *ContentReader (Type: %s, size: %d)", contentReader.Type, contentReader.Length)
+		if len(contentReader.Type) == 0 {
+			contentReader.Type = "application/octet-stream"
+		}
+		if contentReader.Length == 0 {
+			// Let's try to get a length from the reader
+			content, err := ContentFromReader(contentReader, contentReader.Type)
+			if err != nil { return nil, err }
+			return content.Reader(), nil
+		}
+		return contentReader, nil
 	} else if content, ok := options.Payload.(Content); ok {
 		// Here we ignore options.PayloadType as the Content embeds its ContentType
 		log.Tracef("Payload is a Content (Type: %s, size: %d)", content.Type, content.Length)
+		return content.Reader(), nil
+	} else if content, ok := options.Payload.(*Content); ok {
+		// Here we ignore options.PayloadType as the Content embeds its ContentType
+		log.Tracef("Payload is a *Content (Type: %s, size: %d)", content.Type, content.Length)
 		return content.Reader(), nil
 	} else if payloadType.Kind() == reflect.Struct || (payloadType.Kind() == reflect.Ptr && reflect.Indirect(reflect.ValueOf(options.Payload)).Kind() == reflect.Struct) { // JSONify the payload
 		log.Tracef("Payload is a Struct, JSONifying it")
