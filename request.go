@@ -226,7 +226,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		if results != nil {
 			err = json.Unmarshal(resContent.Data, results)
 			if err != nil {
-				log.Errorf("Failed to decode response, use the ContentReader", err)
+				log.Errorf("Failed to decode response, use the ContentReader, JSON Error: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
 			}
 		}
 		return resContent.Reader(), nil
@@ -289,7 +289,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		}
 		payload, err := json.Marshal(options.Payload)
 		if err != nil {
-			return nil, errors.Wrap(err, "Failed to encode payload into JSON")
+			return nil, errors.JSONMarshalError.Wrap(err)
 		}
 		if options.RequestBodyLogSize > 0 {
 			log.Tracef("Request body %d bytes: \n%s", len(payload), string(payload[:int(math.Min(float64(options.RequestBodyLogSize), float64(len(payload))))]))
@@ -305,7 +305,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		}
 		payload, err := json.Marshal(options.Payload)
 		if err != nil {
-			return nil, errors.Wrap(err, "Failed to encode payload into JSON")
+			return nil, errors.JSONMarshalError.Wrap(err)
 		}
 		if options.RequestBodyLogSize > 0 {
 			log.Tracef("Request body %d bytes: \n%s", len(payload), string(payload[:int(math.Min(float64(options.RequestBodyLogSize), float64(len(payload))))]))
