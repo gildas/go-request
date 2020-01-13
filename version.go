@@ -4,4 +4,4 @@ package request
 var commit string
 
 // VERSION is the version of this library
-var VERSION = "0.2.2" + commit
+var VERSION = "0.2.3" + commit
