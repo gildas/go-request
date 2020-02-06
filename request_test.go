@@ -509,7 +509,7 @@ func (suite *RequestSuite) TestCanSendRequestWithToken() {
 func (suite *RequestSuite) TestShouldFailSendingWithMissingURL() {
 	_, err := request.Send(&request.Options{}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
-	suite.Assert().True(errors.Is(err, errors.ArgumentMissingError), "error should be an Argument Missing error, error: %+v", err)
+	suite.Assert().True(errors.Is(err, errors.ArgumentMissing), "error should be an Argument Missing error, error: %+v", err)
 	var details *errors.Error
 	suite.Require().True(errors.As(err, &details), "Error chain should contain an errors.Error")
 	suite.Assert().Equal("URL", details.What, "Error's What is wrong")
@@ -523,7 +523,7 @@ func (suite *RequestSuite) TestShouldFailSendingWithWrongURL() {
 		Logger: suite.Logger,
 	}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
-	suite.Assert().True(errors.Is(err, errors.HTTPNotFoundError), "error should be an HTTP Not Found error, error: %+v", err)
+	suite.Assert().True(errors.Is(err, errors.HTTPNotFound), "error should be an HTTP Not Found error, error: %+v", err)
 }
 
 func (suite *RequestSuite) TestShouldFailSendingWithInvalidMethod() {
@@ -676,7 +676,7 @@ func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd1Attempt() {
 	}, nil)
 	end := time.Since(start)
 	suite.Require().NotNil(err, "Should have failed sending request")
-	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeoutError), "error should be an HTTP Request Timeout error, error: %+v", err)
+	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeout), "error should be an HTTP Request Timeout error, error: %+v", err)
 	suite.Assert().LessOrEqual(int64(end), int64(2*time.Second), "The request lasted more than 2 second (%s)", end)
 }
 
@@ -692,7 +692,7 @@ func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd2Attempts() {
 	}, nil)
 	end := time.Since(start)
 	suite.Require().NotNil(err, "Should have failed sending request")
-	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeoutError), "error should be an HTTP Request Timeout error, error: %+v", err)
+	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeout), "error should be an HTTP Request Timeout error, error: %+v", err)
 	suite.Assert().LessOrEqual(int64(end), int64(4*time.Second), "The request lasted more than 4 second (%s)", end)
 }
 
