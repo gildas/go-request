@@ -70,7 +70,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		options.Context = context.Background()
 	}
 	if options.URL == nil {
-		return nil, errors.ArgumentMissingError.With("URL").WithStack()
+		return nil, errors.ArgumentMissing.With("URL").WithStack()
 	}
 	if len(options.RequestID) == 0 {
 		options.RequestID = uuid.Must(uuid.NewRandom()).String()
@@ -226,13 +226,13 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		if results != nil {
 			err = json.Unmarshal(resContent.Data, results)
 			if err != nil {
-				log.Errorf("Failed to decode response, use the ContentReader, JSON Error: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
+				log.Warnf("Failed to decode response, use the ContentReader, JSON Error: %v", err)
 			}
 		}
 		return resContent.Reader(), nil
 	}
 	// If we get here, there is an error
-	return nil, errors.Wrapf(errors.HTTPStatusRequestTimeoutError, "Giving up after %d attempts", options.Attempts)
+	return nil, errors.Wrapf(errors.HTTPStatusRequestTimeout, "Giving up after %d attempts", options.Attempts)
 }
 
 // buildRequestContent builds a Content for the request
