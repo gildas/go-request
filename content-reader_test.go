@@ -2,14 +2,15 @@ package request_test
 
 import (
 	"bytes"
-	"io/ioutil"
 	"encoding/json"
-	"github.com/gildas/go-request"
-	"github.com/gildas/go-errors"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"io/ioutil"
 	"net/url"
 	"testing"
+
+	"github.com/gildas/go-errors"
+	"github.com/gildas/go-request"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCanCreateContentWithURL(t *testing.T) {

@@ -1,10 +1,10 @@
 package request_test
 
 import (
-	"net/http"
-	"io/ioutil"
 	"bytes"
 	"encoding/json"
+	"io/ioutil"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"reflect"
@@ -145,7 +145,7 @@ func (suite *RequestSuite) TestCanSendRequestWithContentReaderPayload() {
 	data := struct{ ID string }{ID: "1234"}
 	payload, _ := json.Marshal(data)
 	payloadReader := request.ContentReader{
-		Type: "application/json",
+		Type:   "application/json",
 		Length: int64(len(payload)),
 		Reader: ioutil.NopCloser(bytes.NewBuffer(payload)),
 	}
@@ -168,7 +168,7 @@ func (suite *RequestSuite) TestCanSendRequestWithContentReaderPayloadAndNoLength
 	data := struct{ ID string }{ID: "1234"}
 	payload, _ := json.Marshal(data)
 	payloadReader := request.ContentReader{
-		Type: "application/json",
+		Type:   "application/json",
 		Reader: ioutil.NopCloser(bytes.NewBuffer(payload)),
 	}
 	reader, err := request.Send(&request.Options{
@@ -212,7 +212,7 @@ func (suite *RequestSuite) TestCanSendRequestWithContentReaderPointerPayload() {
 	data := struct{ ID string }{ID: "1234"}
 	payload, _ := json.Marshal(data)
 	payloadReader := &request.ContentReader{
-		Type: "application/json",
+		Type:   "application/json",
 		Length: int64(len(payload)),
 		Reader: ioutil.NopCloser(bytes.NewBuffer(payload)),
 	}
@@ -235,7 +235,7 @@ func (suite *RequestSuite) TestCanSendRequestWithContentReaderPointerPayloadAndN
 	data := struct{ ID string }{ID: "1234"}
 	payload, _ := json.Marshal(data)
 	payloadReader := &request.ContentReader{
-		Type: "application/json",
+		Type:   "application/json",
 		Reader: ioutil.NopCloser(bytes.NewBuffer(payload)),
 	}
 	reader, err := request.Send(&request.Options{
@@ -384,7 +384,7 @@ func (suite *RequestSuite) TestCanSendRequestWithMapPayload() {
 	serverURL, _ = serverURL.Parse("/items")
 	reader, err := request.Send(&request.Options{
 		URL:                serverURL,
-		Payload:            map[string]stuff{"ID": stuff{"1234"}},
+		Payload:            map[string]stuff{"ID": {"1234"}},
 		RequestBodyLogSize: -1,
 		Logger:             suite.Logger,
 	}, nil)
@@ -541,9 +541,9 @@ func (suite *RequestSuite) TestShouldFailSendingWithUnsupportedPayload() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/items")
 	_, err := request.Send(&request.Options{
-		URL:        serverURL,
-		Payload:    1234,
-		Logger:     suite.Logger,
+		URL:     serverURL,
+		Payload: 1234,
+		Logger:  suite.Logger,
 	}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
 	suite.Assert().Contains(err.Error(), "Unsupported Payload: int")
@@ -595,7 +595,7 @@ func (suite *RequestSuite) TestShouldFailSendingWithMissingAttachmentKey() {
 
 func (suite *RequestSuite) TestShouldFailSendingWitBogusAttachmentReader() {
 	reader := &request.ContentReader{
-		Type: "image/png",
+		Type:   "image/png",
 		Length: int64(67),
 		Reader: failingReader(0),
 	}

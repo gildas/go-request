@@ -1,13 +1,12 @@
 package request_test
 
 import (
-	"net/http"
-	"net"
 	"io"
+	"net"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 )
-
 
 func CreateTestProxy(suite *RequestSuite) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {

@@ -11,7 +11,7 @@ func TestCanCreateBasicAuthorization(t *testing.T) {
 	assert.Equal(t, expected, request.BasicAuthorization("user", "password"))
 }
 
-func TestCanCreateTokenAuthorization(t * testing.T) {
+func TestCanCreateTokenAuthorization(t *testing.T) {
 	expected := "Bearer mytoken"
 	assert.Equal(t, expected, request.BearerAuthorization("mytoken"))
 }

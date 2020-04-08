@@ -33,7 +33,7 @@ type Options struct {
 	Headers             map[string]string
 	Parameters          map[string]string
 	Accept              string
-	PayloadType         string         // if not provided, it is computed. payload==struct => json, payload==map => form
+	PayloadType         string // if not provided, it is computed. payload==struct => json, payload==map => form
 	Payload             interface{}
 	Attachment          *ContentReader // binary data that should be attached to the paylod (e.g.: multipart forms)
 	Authorization       string
@@ -42,8 +42,8 @@ type Options struct {
 	Attempts            int
 	InterAttemptDelay   time.Duration
 	Timeout             time.Duration
-	RequestBodyLogSize  int            // how many characters of the request body should be logged, if possible (<0 => nothing logged)
-	ResponseBodyLogSize int            // how many characters of the response body should be logged (<0 => nothing logged)
+	RequestBodyLogSize  int // how many characters of the request body should be logged, if possible (<0 => nothing logged)
+	ResponseBodyLogSize int // how many characters of the response body should be logged (<0 => nothing logged)
 	Logger              *logger.Logger
 }
 
@@ -51,7 +51,7 @@ type Options struct {
 const DefaultAttempts = 5
 
 // DefaultTimeout defines the timeout for a request
-const DefaultTimeout  = 2 * time.Second
+const DefaultTimeout = 2 * time.Second
 
 // DefaultInterAttemptDelay defines the sleep delay between 2 attempts
 const DefaultInterAttemptDelay = 1 * time.Second
@@ -111,7 +111,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		options.Attempts = DefaultAttempts
 	}
 
-	if options.InterAttemptDelay < 1 * time.Second {
+	if options.InterAttemptDelay < 1*time.Second {
 		options.InterAttemptDelay = time.Duration(DefaultInterAttemptDelay)
 	}
 
@@ -140,8 +140,8 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 	}
 
 	// Setting request headers
-	req.Header.Set("User-Agent",   options.UserAgent)
-	req.Header.Set("Accept",       options.Accept)
+	req.Header.Set("User-Agent", options.UserAgent)
+	req.Header.Set("Accept", options.Accept)
 	req.Header.Set("X-Request-Id", options.RequestID)
 	if len(options.Authorization) > 0 {
 		req.Header.Set("Authorization", options.Authorization)
@@ -170,13 +170,13 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 	for attempt := 0; attempt < options.Attempts; attempt++ {
 		log.Tracef("HTTP %s %s #%d/%d", req.Method, req.URL.String(), attempt, options.Attempts)
 		log.Tracef("Request Headers: %#v", req.Header)
-		start    := time.Now()
+		start := time.Now()
 		res, err := httpclient.Do(req)
 		duration := time.Since(start)
-		log      = log.Record("duration", duration)
+		log = log.Record("duration", duration)
 		if err != nil {
 			log.Errorf("Failed to send request", err)
-			if attempt + 1 < options.Attempts {
+			if attempt+1 < options.Attempts {
 				log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 				time.Sleep(options.InterAttemptDelay)
 			}
@@ -190,7 +190,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0))
 		if err != nil {
 			log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
-			return nil, err // err is already "decorated" by ContentReader
+			return nil, err                                           // err is already "decorated" by ContentReader
 		}
 		// some servers give the wrong mime type for JPEG files
 		if resContent.Type == "image/jpg" {
@@ -202,9 +202,9 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 				resContent.Type = options.Accept
 			}
 			if resContent.Type == "application/octet-stream" {
-				_ = mime.AddExtensionType(".mp3",  "audio/mpeg3")
-				_ = mime.AddExtensionType(".m4a",  "audio/x-m4a")
-				_ = mime.AddExtensionType(".wav",  "audio/wav")
+				_ = mime.AddExtensionType(".mp3", "audio/mpeg3")
+				_ = mime.AddExtensionType(".m4a", "audio/x-m4a")
+				_ = mime.AddExtensionType(".wav", "audio/wav")
 				_ = mime.AddExtensionType(".jpeg", "image/jpg")
 				if restype := mime.TypeByExtension(filepath.Ext(options.URL.Path)); len(restype) > 0 {
 					resContent.Type = restype
@@ -257,7 +257,9 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		if contentReader.Length == 0 {
 			// Let's try to get a length from the reader
 			content, err := ContentFromReader(contentReader, contentReader.Type)
-			if err != nil { return nil, err }
+			if err != nil {
+				return nil, err
+			}
 			return content.Reader(), nil
 		}
 		return &contentReader, nil
@@ -269,7 +271,9 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		if contentReader.Length == 0 {
 			// Let's try to get a length from the reader
 			content, err := ContentFromReader(contentReader, contentReader.Type)
-			if err != nil { return nil, err }
+			if err != nil {
+				return nil, err
+			}
 			return content.Reader(), nil
 		}
 		return contentReader, nil
@@ -344,7 +348,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		}
 
 		log.Tracef("Building a multipart data form with 1 attachment")
-		body   := &bytes.Buffer{}
+		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
 		for key, value := range attributes {
 			if strings.HasPrefix(key, ">") {
