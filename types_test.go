@@ -1,8 +1,8 @@
 package request_test
 
 import (
-	"fmt"
 	"encoding/base64"
+	"fmt"
 	"testing"
 
 	"github.com/gildas/go-errors"

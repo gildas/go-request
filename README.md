@@ -1,11 +1,15 @@
 # go-request
 
-[![GoDoc](https://godoc.org/github.com/gildas/go-requests?status.svg)](https://godoc.org/github.com/gildas/go-requests)
-A Package to send requests to HTTP/REST services
+![GoVersion](https://img.shields.io/github/go-mod/go-version/gildas/go-request)
+[![GoDoc](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/gildas/go-request) 
+[![License](https://img.shields.io/github/license/gildas/go-request)](https://github.com/gildas/go-request/blob/master/LICENSE) 
+[![Report](https://goreportcard.com/badge/github.com/gildas/go-request)](https://goreportcard.com/report/github.com/gildas/go-request)  
+
+A Package to send requests to HTTP/REST services.
 
 |  |   |   |   |
 ---|---|---|---|
-master | [![Build Status](https://dev.azure.com/keltiek/gildas/_apis/build/status/gildas.go-request?branchName=master)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=2&branchName=master) | [![Tests](https://img.shields.io/azure-devops/tests/keltiek/gildas/3/master)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=master) | [![coverage](https://img.shields.io/azure-devops/coverage/keltiek/gildas/3/master)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=master&view=codecoverage-tab)  
+master | [![Build Status](https://dev.azure.com/keltiek/gildas/_apis/build/status/gildas.go-request?branchName=master)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=master) | [![Tests](https://img.shields.io/azure-devops/tests/keltiek/gildas/3/master)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=master) | [![coverage](https://img.shields.io/azure-devops/coverage/keltiek/gildas/3/master)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=master&view=codecoverage-tab)  
 dev | [![Build Status](https://dev.azure.com/keltiek/gildas/_apis/build/status/gildas.go-request?branchName=dev)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=dev) | [![Tests](https://img.shields.io/azure-devops/tests/keltiek/gildas/3/dev)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=dev) | [![coverage](https://img.shields.io/azure-devops/coverage/keltiek/gildas/3/dev)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=dev&view=codecoverage-tab)  
 
 ## Usage

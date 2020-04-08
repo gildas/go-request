@@ -1,20 +1,21 @@
 package request
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net/url"
+
 	"github.com/gildas/go-errors"
 )
 
 // Content defines some content
 type Content struct {
-	Type   string        `json:"contentType"`
-	URL    *url.URL      `json:"contentUrl"`
-	Length int64         `json:"contentLength"`
-	Data   []byte        `json:"contentData"`
+	Type   string   `json:"contentType"`
+	URL    *url.URL `json:"contentUrl"`
+	Length int64    `json:"contentLength"`
+	Data   []byte   `json:"contentData"`
 }
 
 // ContentReader defines a content Reader (like data from an HTTP request)
@@ -25,7 +26,7 @@ type ContentReader struct {
 }
 
 // ContentWithData instantiates a Content from a simple byte array
-func ContentWithData(data []byte, options... interface{}) *Content {
+func ContentWithData(data []byte, options ...interface{}) *Content {
 	content := &Content{}
 	content.Data = data
 	for _, option := range options {
@@ -33,9 +34,9 @@ func ContentWithData(data []byte, options... interface{}) *Content {
 			content.URL = u
 		} else if t, ok := option.(string); ok {
 			content.Type = t
-		} else if l, ok := option.(int64); ok  && l > 0 {
+		} else if l, ok := option.(int64); ok && l > 0 {
 			content.Length = l
-		} else if l, ok := option.(int); ok  && l > 0 {
+		} else if l, ok := option.(int); ok && l > 0 {
 			content.Length = int64(l)
 		}
 	}
@@ -46,7 +47,7 @@ func ContentWithData(data []byte, options... interface{}) *Content {
 }
 
 // ContentFromReader instantiates a Content from an I/O reader
-func ContentFromReader(reader io.Reader, options... interface{}) (*Content, error) {
+func ContentFromReader(reader io.Reader, options ...interface{}) (*Content, error) {
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -55,7 +56,7 @@ func ContentFromReader(reader io.Reader, options... interface{}) (*Content, erro
 }
 
 // ReadContent instantiates a Content from an I/O reader
-func (reader ContentReader) ReadContent(options... interface{}) (*Content, error) {
+func (reader ContentReader) ReadContent(options ...interface{}) (*Content, error) {
 	options = append(options, reader.Type)
 	options = append(options, reader.Length)
 	return ContentFromReader(reader, options...)

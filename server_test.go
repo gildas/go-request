@@ -1,14 +1,15 @@
 package request_test
 
 import (
-	"net/http"
-	"fmt"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"time"
-	"github.com/gildas/go-request"
+
 	"github.com/gildas/go-core"
+	"github.com/gildas/go-request"
 )
 
 func CreateTestServer(suite *RequestSuite) *httptest.Server {
@@ -81,7 +82,7 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 					core.RespondWithError(res, http.StatusBadRequest, err)
 					return
 				}
-				item := struct{ID string}{}
+				item := struct{ ID string }{}
 				if err = json.Unmarshal(reqContent.Data, &item); err != nil {
 					log.Errorf("Failed to read request content", err)
 					core.RespondWithError(res, http.StatusBadRequest, err)
@@ -205,7 +206,7 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 			log.Infof("Request body: %s, %d bytes: \n%s", reqContent.Type, reqContent.Length, string(reqContent.Data))
 			switch req.URL.Path {
 			case "/items":
-				items := []struct{ID string}{}
+				items := []struct{ ID string }{}
 				if err = json.Unmarshal(reqContent.Data, &items); err != nil {
 					log.Errorf("Failed to read request content", err)
 					core.RespondWithError(res, http.StatusBadRequest, err)
