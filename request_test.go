@@ -32,7 +32,7 @@ func TestRequestSuite(t *testing.T) {
 
 func (suite *RequestSuite) SetupSuite() {
 	suite.Name = strings.TrimSuffix(reflect.TypeOf(*suite).Name(), "Suite")
-	suite.Logger = logger.Create("test", &logger.FileStream{Path: "./test-request.log", Unbuffered: true, FilterLevel: logger.TRACE}).Child("test", "test")
+	suite.Logger = logger.Create("test", &logger.FileStream{Path: "./log/test-request.log", Unbuffered: true, FilterLevel: logger.TRACE}).Child("test", "test")
 	suite.Server = CreateTestServer(suite)
 	suite.Proxy = CreateTestProxy(suite)
 }
