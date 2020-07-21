@@ -137,6 +137,18 @@ if err != nil {
     return err
 }
 ```
+To send the request again when receiving a Service Unavailable (`Attempts` and `Timeout` are optional):  
+```go
+_, err := request.Send(&request.Options{
+    URL:                  myURL,
+    RetryableStatusCodes: []int{http.StatusServiceUnavailable},
+    Attempts:             10,
+    Timeout:              2 * time.Second,
+}, nil)
+if err != nil {
+    return err
+}
+```
 
 **Notes:**  
 - if the PayloadType is not mentioned, it is calculated when processing the Payload.
@@ -146,6 +158,8 @@ if err != nil {
 - if the payload is an array or a slice, the body is sent as `application/json` and marshaled.
 - The option `Logger` can be used to let the `request` library log to a `gildas/go-logger`. By default, it logs to a `NilStream` (see github.com/gildas/go-logger).
 - When using a logger, you can control how much of the Request/Response Body is logged with the options `RequestBodyLogSize`/`ResponseBodyLogSize`. By default they are set to 2048 bytes. If you do not want to log them, set the options to *-1*.
+- `Send()` makes 5 attempts by default to reach the given URL. If option `RetryableStatusCodes` is given, it will attempt the request again when it receives an HTTP Status Code in the given list.
+- The default timeout for `Send()` is 1 second.
 
 **TODO**  
 - Support other kinds of `map` in the payload, like `map[string]int`, etc.

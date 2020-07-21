@@ -178,8 +178,18 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				if _, err := res.Write([]byte("body")); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
+			case "/retry":
+				attempt := req.Header.Get("X-Attempt")
+				if attempt != "5" { // On the 5th attempt, we want to return 200
+					res.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
 			case "/redirect":
 				res.Header().Add("Location", "/")
+				res.WriteHeader(http.StatusFound)
+				log.Infof("Redirecting to /")
+			case "/bad_redirect":
+				res.Header().Add("Location", "") // This is on purpose to check if the client handles this error well
 				res.WriteHeader(http.StatusFound)
 				log.Infof("Redirecting to /")
 			case "/results":

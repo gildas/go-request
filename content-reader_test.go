@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"testing"
 
@@ -111,7 +112,7 @@ func TestContentReaderCanUnmarshallData(t *testing.T) {
 }
 
 func TestShouldFailUnmarshallContentReaderWithBogusReader(t *testing.T) {
-	reader := request.ContentReader{"application/json", 0, failingReader(0)}
+	reader := request.ContentReader{"application/json", 0, failingReader(0), http.Header{}}
 	data := stuff{}
 	err := reader.UnmarshalContentJSON(&data)
 	require.NotNil(t, err, "Should fail unmarshal content")
@@ -119,7 +120,7 @@ func TestShouldFailUnmarshallContentReaderWithBogusReader(t *testing.T) {
 }
 
 func TestShouldFailUnmarshallContentReaderWithBogusData(t *testing.T) {
-	reader := request.ContentReader{"application/json", 0, ioutil.NopCloser(bytes.NewBufferString(`{"ID": 1234}`))}
+	reader := request.ContentReader{"application/json", 0, ioutil.NopCloser(bytes.NewBufferString(`{"ID": 1234}`)), http.Header{}}
 	data := stuff{}
 	err := reader.UnmarshalContentJSON(&data)
 	require.NotNil(t, err, "Should fail unmarshal content")
