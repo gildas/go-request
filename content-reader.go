@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 
 	"github.com/gildas/go-errors"
@@ -12,17 +13,19 @@ import (
 
 // Content defines some content
 type Content struct {
-	Type   string   `json:"contentType"`
-	URL    *url.URL `json:"contentUrl"`
-	Length int64    `json:"contentLength"`
-	Data   []byte   `json:"contentData"`
+	Type    string      `json:"contentType"`
+	URL     *url.URL    `json:"contentUrl"`
+	Length  int64       `json:"contentLength"`
+	Data    []byte      `json:"contentData"`
+	Headers http.Header `json:"contentHeaders"`
 }
 
 // ContentReader defines a content Reader (like data from an HTTP request)
 type ContentReader struct {
-	Type   string        `json:"contentType"`
-	Length int64         `json:"contentLength"`
-	Reader io.ReadCloser `json:"-"`
+	Type    string        `json:"contentType"`
+	Length  int64         `json:"contentLength"`
+	Reader  io.ReadCloser `json:"-"`
+	Headers http.Header   `json:"contentHeaders"`
 }
 
 // ContentWithData instantiates a Content from a simple byte array
@@ -38,10 +41,15 @@ func ContentWithData(data []byte, options ...interface{}) *Content {
 			content.Length = l
 		} else if l, ok := option.(int); ok && l > 0 {
 			content.Length = int64(l)
+		} else if h, ok := option.(http.Header); ok {
+			content.Headers = h
 		}
 	}
 	if content.Length == 0 {
 		content.Length = int64(len(content.Data))
+	}
+	if content.Headers == nil {
+		content.Headers = http.Header{}
 	}
 	return content
 }
@@ -59,6 +67,7 @@ func ContentFromReader(reader io.Reader, options ...interface{}) (*Content, erro
 func (reader ContentReader) ReadContent(options ...interface{}) (*Content, error) {
 	options = append(options, reader.Type)
 	options = append(options, reader.Length)
+	options = append(options, reader.Headers)
 	return ContentFromReader(reader, options...)
 }
 
@@ -77,9 +86,10 @@ func (reader ContentReader) UnmarshalContentJSON(v interface{}) (err error) {
 // Reader gets a ContentReader from this Content
 func (content *Content) Reader() *ContentReader {
 	reader := &ContentReader{
-		Type:   content.Type,
-		Length: content.Length,
-		Reader: ioutil.NopCloser(bytes.NewReader(content.Data)),
+		Type:    content.Type,
+		Length:  content.Length,
+		Headers: content.Headers,
+		Reader:  ioutil.NopCloser(bytes.NewReader(content.Data)),
 	}
 	if reader.Length == 0 {
 		reader.Length = int64(len(content.Data))

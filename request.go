@@ -187,7 +187,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		log.Tracef("Response Headers: %#v", res.Header)
 
 		// Reading the response body
-		resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0))
+		resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header)
 		if err != nil {
 			log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
 			return nil, err                                           // err is already "decorated" by ContentReader
