@@ -664,6 +664,32 @@ func (suite *RequestSuite) TestCanReceiveTypeFromURL() {
 	suite.Assert().Equal("audio/mpeg3", content.Type, "Type was not converted correctly")
 }
 
+func (suite *RequestSuite) TestCanRetryRequest() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/retry")
+	_, err := request.Send(&request.Options{
+		URL:                  serverURL,
+		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
+		Attempts:             5,
+		Logger:               suite.Logger,
+		Timeout:              1 * time.Second,
+	}, nil)
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+}
+
+func (suite *RequestSuite) TestShouldFailWithBadRedirectLocation() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/bad_redirect")
+	_, err := request.Send(&request.Options{
+		URL:      serverURL,
+		Logger:   suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	var details *url.Error
+	suite.Require().True(errors.As(err, &details), "Error chain should contain an URL Error")
+	suite.Assert().Contains(details.Error(), "response missing Location header")
+}
+
 func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd1Attempt() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/timeout")
@@ -694,6 +720,20 @@ func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd2Attempts() {
 	suite.Require().NotNil(err, "Should have failed sending request")
 	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeout), "error should be an HTTP Request Timeout error, error: %+v", err)
 	suite.Assert().LessOrEqual(int64(end), int64(4*time.Second), "The request lasted more than 4 second (%s)", end)
+}
+
+func (suite *RequestSuite) TestShouldFailWithTooManyRetries() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/retry")
+	_, err := request.Send(&request.Options{
+		URL:                  serverURL,
+		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
+		Attempts:             2,
+		Logger:               suite.Logger,
+		Timeout:              1 * time.Second,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Assert().True(errors.Is(err, errors.HTTPServiceUnavailable), "error should be an HTTP Service Unavailable error, error: %+v", err)
 }
 
 func (suite *RequestSuite) TestShouldFailReceivingBadResponse() {
