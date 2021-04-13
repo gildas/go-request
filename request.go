@@ -179,14 +179,19 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		log = log.Record("duration", duration)
 		if err != nil {
 			urlErr := &url.Error{}
-			if errors.As(err, &urlErr) && urlErr.Timeout() {
-				if attempt+1 < options.Attempts {
-					log.Errorf("Failed to send request", err)
-					log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
-					time.Sleep(options.InterAttemptDelay)
-					continue
+			if errors.As(err, &urlErr) {
+				if urlErr.Timeout() {
+					if attempt+1 < options.Attempts {
+						log.Errorf("Failed to send request", err)
+						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
+						time.Sleep(options.InterAttemptDelay)
+						continue
+					}
+					return nil, errors.Wrapf(errors.HTTPStatusRequestTimeout, "Giving up after %d attempts", options.Attempts)
+				} else {
+					log.Tracef("URL Error, temporary=%t, timeout=%t, unwrap=%s", urlErr.Temporary(), urlErr.Timeout(), urlErr.Unwrap())
+					return nil, errors.WithStack(err)
 				}
-				return nil, errors.Wrapf(errors.HTTPStatusRequestTimeout, "Giving up after %d attempts", options.Attempts)
 			}
 			return nil, err
 		}
