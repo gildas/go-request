@@ -777,3 +777,25 @@ func (suite *RequestSuite) TestCanSendGetRequestWithRedirect() {
 	suite.Require().NotNil(content, "Content should not be nil")
 	suite.Assert().Equal("body", string(content.Data))
 }
+
+func (suite *RequestSuite) TestCanSendRequestWithContentPayloadAndOneTimeout() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item-with-timeout")
+	data := struct{ ID string }{ID: "1234"}
+	payload, _ := json.Marshal(data)
+	payloadContent := request.ContentWithData(payload, "application/json")
+	reader, err := request.Send(&request.Options{
+		Method:  http.MethodPost,
+		URL:     serverURL,
+		Payload: *payloadContent,
+		Timeout: 500 * time.Millisecond,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1234", string(content.Data))
+	suite.Logger.Infof("Test finished")
+}

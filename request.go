@@ -185,11 +185,17 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 						log.Errorf("Failed to send request", err)
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 						time.Sleep(options.InterAttemptDelay)
+						// req.Body.Close()
+						// reqContent, err := buildRequestContent(log, options)
+						// if err != nil {
+						// 	log.Errorf("Failed to create the request Content", err)
+						// }
+						req.Body = reqContent.Reader
 						continue
 					}
 					return nil, errors.Wrapf(errors.HTTPStatusRequestTimeout, "Giving up after %d attempts", options.Attempts)
 				} else {
-					log.Tracef("URL Error, temporary=%t, timeout=%t, unwrap=%s", urlErr.Temporary(), urlErr.Timeout(), urlErr.Unwrap())
+					log.Errorf("URL Error, temporary=%t, timeout=%t, unwrap=%s", urlErr.Temporary(), urlErr.Timeout(), urlErr.Unwrap(), err)
 					return nil, errors.WithStack(err)
 				}
 			}

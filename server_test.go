@@ -9,10 +9,13 @@ import (
 	"time"
 
 	"github.com/gildas/go-core"
+	"github.com/gildas/go-errors"
 	"github.com/gildas/go-request"
 )
 
 func CreateTestServer(suite *RequestSuite) *httptest.Server {
+	attempts := map[string]int{}
+
 	return httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		log := suite.Logger.Child("server", "handler")
 		headers := map[string]string{}
@@ -42,7 +45,7 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 					}
 					if len(items) < 1 {
 						log.Errorf(("Not enough items to add"))
-						core.RespondWithError(res, http.StatusBadRequest, err)
+						core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("items").WithStack())
 						return
 					}
 					log.Infof("Adding #%d items", len(items))
@@ -79,7 +82,39 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				log.Infof("Request body: %s, %d bytes: \n%s", reqContent.Type, reqContent.Length, string(reqContent.Data))
 				if reqContent.Length == 0 {
 					log.Errorf("Content is empty")
+					core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("body").WithStack())
+					return
+				}
+				item := struct{ ID string }{}
+				if err = json.Unmarshal(reqContent.Data, &item); err != nil {
+					log.Errorf("Failed to read request content", err)
 					core.RespondWithError(res, http.StatusBadRequest, err)
+					return
+				}
+				if _, err := res.Write([]byte(item.ID)); err != nil {
+					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+				}
+			case "/item-with-timeout":
+				count, found := attempts[req.URL.Path]
+				if !found || count == 0 { // in that case, we should timeout
+					log.Infof("Path: %s, first attempt, timing out", req.URL.Path)
+					time.Sleep(600 * time.Millisecond)
+					log.Infof("Path: %s, waited long enough", req.URL.Path)
+					attempts[req.URL.Path] = count + 1
+					return
+				}
+				log.Infof("Path: %s, attempt %d, processing expecting %s bytes", req.URL.Path, count + 1, req.Header.Get("Content-Length"))
+				attempts[req.URL.Path] = count + 1
+				reqContent, err := request.ContentFromReader(req.Body, req.Header.Get("Content-Type"))
+				if err != nil {
+					log.Errorf("Failed to read request content", err)
+					core.RespondWithError(res, http.StatusBadRequest, err)
+					return
+				}
+				log.Infof("Request body: %s, %d bytes: \n%s", reqContent.Type, reqContent.Length, string(reqContent.Data))
+				if reqContent.Length == 0 {
+					log.Errorf("Content is empty")
+					core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("body").WithStack())
 					return
 				}
 				item := struct{ ID string }{}
@@ -121,12 +156,12 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 					log.Debugf("File header=%s", fileHeader.Header)
 					if fileHeader.Header.Get("Content-Type") != "image/png" {
 						log.Errorf("Attachment is not a PNG image")
-						core.RespondWithError(res, http.StatusBadRequest, err)
+						core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentInvalid.With("Content-Type", fileHeader.Header.Get("Content-Type")).WithStack())
 						return
 					}
 					if fileHeader.Size == 0 {
 						log.Errorf("Attachment is empty")
-						core.RespondWithError(res, http.StatusBadRequest, err)
+						core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("body").WithStack())
 						return
 					}
 				}
