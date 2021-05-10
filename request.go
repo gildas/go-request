@@ -185,11 +185,11 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 						log.Errorf("Failed to send request", err)
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 						time.Sleep(options.InterAttemptDelay)
-						// req.Body.Close()
-						// reqContent, err := buildRequestContent(log, options)
-						// if err != nil {
-						// 	log.Errorf("Failed to create the request Content", err)
-						// }
+						req.Body.Close()
+						reqContent, err := buildRequestContent(log, options)
+						if err != nil {
+							log.Errorf("Failed to create the request Content", err)
+						}
 						req.Body = reqContent.Reader
 						continue
 					}
