@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,8 +15,6 @@ import (
 )
 
 func CreateTestServer(suite *RequestSuite) *httptest.Server {
-	attempts := map[string]int{}
-
 	return httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		log := suite.Logger.Child("server", "handler")
 		headers := map[string]string{}
@@ -95,36 +94,40 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
 			case "/item-with-timeout":
-				count, found := attempts[req.URL.Path]
-				if !found || count == 0 { // in that case, we should timeout
-					log.Infof("Path: %s, first attempt, timing out", req.URL.Path)
-					time.Sleep(600 * time.Millisecond)
-					log.Infof("Path: %s, waited long enough", req.URL.Path)
-					attempts[req.URL.Path] = count + 1
+				_log := log.Record("attempt", req.Header.Get("X-Attempt"))
+				attempt, err := strconv.Atoi(req.Header.Get("X-Attempt"))
+				if err != nil {
+					_log.Errorf("Request Header X-Attempt does not contain a valid number", err)
+					attempt = 0
+				}
+				if attempt <= 1 { // in that case, we should timeout
+					responseTimeout := 600 * time.Millisecond
+					_log.Infof("Path: %s, first attempt, timing out (%s)", req.URL.Path, responseTimeout)
+					time.Sleep(responseTimeout)
+					_log.Infof("Path: %s, waited long enough", req.URL.Path)
 					return
 				}
-				log.Infof("Path: %s, attempt %d, processing expecting %s bytes", req.URL.Path, count + 1, req.Header.Get("Content-Length"))
-				attempts[req.URL.Path] = count + 1
+				_log.Infof("Path: %s, attempt %d, processing expecting %s bytes", req.URL.Path, attempt, req.Header.Get("Content-Length"))
 				reqContent, err := request.ContentFromReader(req.Body, req.Header.Get("Content-Type"))
 				if err != nil {
-					log.Errorf("Failed to read request content", err)
+					_log.Errorf("Failed to read request content", err)
 					core.RespondWithError(res, http.StatusBadRequest, err)
 					return
 				}
-				log.Infof("Request body: %s, %d bytes: \n%s", reqContent.Type, reqContent.Length, string(reqContent.Data))
+				_log.Infof("Request body: %s, %d bytes: \n%s", reqContent.Type, reqContent.Length, string(reqContent.Data))
 				if reqContent.Length == 0 {
-					log.Errorf("Content is empty")
+					_log.Errorf("Content is empty")
 					core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("body").WithStack())
 					return
 				}
 				item := struct{ ID string }{}
 				if err = json.Unmarshal(reqContent.Data, &item); err != nil {
-					log.Errorf("Failed to read request content", err)
+					_log.Errorf("Failed to read request content", err)
 					core.RespondWithError(res, http.StatusBadRequest, err)
 					return
 				}
 				if _, err := res.Write([]byte(item.ID)); err != nil {
-					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+					_log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
 			case "/image":
 				items := []stuff{}
