@@ -7,8 +7,8 @@
 
 A Package to send requests to HTTP/REST services.
 
-|  |   |   |   |
----|---|---|---|
+|  |   |   |
+---|---|---|
 master | [![Build Status](https://github.com/gildas/go-request/actions/workflows/go.yml/badge.svg?branch=master)](https://github.com/gildas/go-request/actions) | [![coverage](https://codecov.io/gh/gildas/go-request/branch/master/graph/badge.svg)](https://codecov.io/gh/gildas/go-request)  
 dev | [![Build Status](https://github.com/gildas/go-request/actions/workflows/go.yml/badge.svg?branch=dev)](https://github.com/gildas/go-request/actions) | [![coverage](https://codecov.io/gh/gildas/go-request/branch/dev/graph/badge.svg)](https://codecov.io/gh/gildas/go-request)  
 
