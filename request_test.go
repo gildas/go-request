@@ -33,6 +33,22 @@ func TestRequestSuite(t *testing.T) {
 	suite.Run(t, new(RequestSuite))
 }
 
+func (suite *RequestSuite) TestCheckTestServer() {
+	suite.Require().NotNil(suite.Server)
+	serverURL, err := url.Parse(suite.Server.URL)
+	suite.Require().Nil(err)
+	suite.Require().NotNil(serverURL)
+	suite.T().Logf("Server URL: %s", serverURL.String())
+}
+
+func (suite *RequestSuite) TestCheckTestProxy() {
+	suite.Require().NotNil(suite.Proxy)
+	proxyURL, err := url.Parse(suite.Proxy.URL)
+	suite.Require().Nil(err)
+	suite.Require().NotNil(proxyURL)
+	suite.T().Logf("Proxy URL: %s", proxyURL.String())
+}
+
 func (suite *RequestSuite) TestCanSendRequestWithURL() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	reader, err := request.Send(&request.Options{
