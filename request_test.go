@@ -3,6 +3,7 @@ package request_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"github.com/gildas/go-errors"
 	"github.com/gildas/go-logger"
 	"github.com/gildas/go-request"
+	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -24,22 +26,27 @@ type RequestSuite struct {
 	Server *httptest.Server
 	Proxy  *httptest.Server
 	Logger *logger.Logger
+	Start  time.Time
 }
 
 func TestRequestSuite(t *testing.T) {
 	suite.Run(t, new(RequestSuite))
 }
 
-func (suite *RequestSuite) SetupSuite() {
-	suite.Name = strings.TrimSuffix(reflect.TypeOf(*suite).Name(), "Suite")
-	suite.Logger = logger.Create("test", &logger.FileStream{Path: "./log/test-request.log", Unbuffered: true, FilterLevel: logger.TRACE}).Child("test", "test")
-	suite.Server = CreateTestServer(suite)
-	suite.Proxy = CreateTestProxy(suite)
+func (suite *RequestSuite) TestCheckTestServer() {
+	suite.Require().NotNil(suite.Server)
+	serverURL, err := url.Parse(suite.Server.URL)
+	suite.Require().Nil(err)
+	suite.Require().NotNil(serverURL)
+	suite.T().Logf("Server URL: %s", serverURL.String())
 }
 
-func (suite *RequestSuite) TearDownSuite() {
-	suite.Server.Close()
-	suite.Logger.Close()
+func (suite *RequestSuite) TestCheckTestProxy() {
+	suite.Require().NotNil(suite.Proxy)
+	proxyURL, err := url.Parse(suite.Proxy.URL)
+	suite.Require().Nil(err)
+	suite.Require().NotNil(proxyURL)
+	suite.T().Logf("Proxy URL: %s", proxyURL.String())
 }
 
 func (suite *RequestSuite) TestCanSendRequestWithURL() {
@@ -702,6 +709,7 @@ func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd1Attempt() {
 	}, nil)
 	end := time.Since(start)
 	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Infof("Expected error: %s", err.Error())
 	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeout), "error should be an HTTP Request Timeout error, error: %+v", err)
 	suite.Assert().LessOrEqual(int64(end), int64(2*time.Second), "The request lasted more than 2 second (%s)", end)
 }
@@ -718,6 +726,7 @@ func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd2Attempts() {
 	}, nil)
 	end := time.Since(start)
 	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Infof("Expected error: %s", err.Error())
 	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeout), "error should be an HTTP Request Timeout error, error: %+v", err)
 	suite.Assert().LessOrEqual(int64(end), int64(4*time.Second), "The request lasted more than 4 second (%s)", end)
 }
@@ -733,6 +742,7 @@ func (suite *RequestSuite) TestShouldFailWithTooManyRetries() {
 		Timeout:              1 * time.Second,
 	}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Infof("Expected error: %s", err.Error())
 	suite.Assert().True(errors.Is(err, errors.HTTPServiceUnavailable), "error should be an HTTP Service Unavailable error, error: %+v", err)
 }
 
@@ -776,4 +786,74 @@ func (suite *RequestSuite) TestCanSendGetRequestWithRedirect() {
 	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
 	suite.Require().NotNil(content, "Content should not be nil")
 	suite.Assert().Equal("body", string(content.Data))
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithContentPayloadAndOneTimeout() {
+	requestTimeout := 500 * time.Millisecond
+	suite.Logger.Infof("Request Timeout: %s", requestTimeout)
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item-with-timeout")
+	data := struct{ ID string }{ID: "1234"}
+	payload, _ := json.Marshal(data)
+	payloadContent := request.ContentWithData(payload, "application/json")
+	reader, err := request.Send(&request.Options{
+		Method:  http.MethodPost,
+		URL:     serverURL,
+		Payload: *payloadContent,
+		Timeout: requestTimeout,
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1234", string(content.Data))
+	suite.Logger.Infof("Test finished")
+}
+
+// Suite Tools
+
+func (suite *RequestSuite) SetupSuite() {
+	_ = godotenv.Load()
+	suite.Name = strings.TrimSuffix(reflect.TypeOf(*suite).Name(), "Suite")
+	suite.Logger = logger.Create("test",
+	  &logger.FileStream{
+			Path:        fmt.Sprintf("./log/test-%s.log", strings.ToLower(suite.Name)),
+			Unbuffered:  true,
+			FilterLevel: logger.TRACE,
+		},
+	).Child("test", "test")
+	suite.Logger.Infof("Suite Start: %s %s", suite.Name, strings.Repeat("=", 80-14-len(suite.Name)))
+
+	suite.Server = CreateTestServer(suite)
+	suite.Proxy = CreateTestProxy(suite)
+}
+
+func (suite *RequestSuite) TearDownSuite() {
+	suite.Logger.Debugf("Tearing down")
+	if suite.T().Failed() {
+		suite.Logger.Warnf("At least one test failed, we are not cleaning")
+		suite.T().Log("At least one test failed, we are not cleaning")
+	} else {
+		suite.Logger.Infof("All tests succeeded, we are cleaning")
+	}
+	suite.Logger.Infof("Suite End: %s %s", suite.Name, strings.Repeat("=", 80-12-len(suite.Name)))
+
+	suite.Server.Close()
+	suite.Logger.Infof("Closed the Test WEB Server")
+	suite.Logger.Close()
+}
+
+func (suite *RequestSuite) BeforeTest(suiteName, testName string) {
+	suite.Logger.Infof("Test Start: %s %s", testName, strings.Repeat("-", 80-13-len(testName)))
+	suite.Start = time.Now()
+}
+
+func (suite *RequestSuite) AfterTest(suiteName, testName string) {
+	duration := time.Since(suite.Start)
+	if suite.T().Failed() {
+		suite.Logger.Errorf("Test %s failed", testName)
+	}
+	suite.Logger.Record("duration", duration.String()).Infof("Test End: %s %s", testName, strings.Repeat("-", 80-11-len(testName)))
 }
