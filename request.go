@@ -182,7 +182,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 			if errors.As(err, &urlErr) {
 				if urlErr.Timeout() {
 					if attempt+1 < options.Attempts {
-						log.Errorf("Failed to send request", err)
+						log.Errorf("Failed to send request after %s", duration, err)
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 						time.Sleep(options.InterAttemptDelay)
 						req.Body.Close()
