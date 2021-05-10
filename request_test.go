@@ -709,6 +709,7 @@ func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd1Attempt() {
 	}, nil)
 	end := time.Since(start)
 	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Infof("Expected error: %s", err.Error())
 	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeout), "error should be an HTTP Request Timeout error, error: %+v", err)
 	suite.Assert().LessOrEqual(int64(end), int64(2*time.Second), "The request lasted more than 2 second (%s)", end)
 }
@@ -725,6 +726,7 @@ func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd2Attempts() {
 	}, nil)
 	end := time.Since(start)
 	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Infof("Expected error: %s", err.Error())
 	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeout), "error should be an HTTP Request Timeout error, error: %+v", err)
 	suite.Assert().LessOrEqual(int64(end), int64(4*time.Second), "The request lasted more than 4 second (%s)", end)
 }
@@ -740,6 +742,7 @@ func (suite *RequestSuite) TestShouldFailWithTooManyRetries() {
 		Timeout:              1 * time.Second,
 	}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Infof("Expected error: %s", err.Error())
 	suite.Assert().True(errors.Is(err, errors.HTTPServiceUnavailable), "error should be an HTTP Service Unavailable error, error: %+v", err)
 }
 
