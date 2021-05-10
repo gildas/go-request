@@ -9,8 +9,8 @@ A Package to send requests to HTTP/REST services.
 
 |  |   |   |   |
 ---|---|---|---|
-master | [![Build Status](https://dev.azure.com/keltiek/gildas/_apis/build/status/gildas.go-request?branchName=master)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=master) | [![Tests](https://img.shields.io/azure-devops/tests/keltiek/gildas/3/master)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=master) | [![coverage](https://img.shields.io/azure-devops/coverage/keltiek/gildas/3/master)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=master&view=codecoverage-tab)  
-dev | [![Build Status](https://dev.azure.com/keltiek/gildas/_apis/build/status/gildas.go-request?branchName=dev)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=dev) | [![Tests](https://img.shields.io/azure-devops/tests/keltiek/gildas/3/dev)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=dev) | [![coverage](https://img.shields.io/azure-devops/coverage/keltiek/gildas/3/dev)](https://dev.azure.com/keltiek/gildas/_build/latest?definitionId=3&branchName=dev&view=codecoverage-tab)  
+master | [![Build Status](https://github.com/gildas/go-request/actions/workflows/go.yml/badge.svg?branch=master)](https://github.com/gildas/go-request/actions) | [![coverage](https://codecov.io/gh/gildas/go-request/branch/master/graph/badge.svg)](https://codecov.io/gh/gildas/go-request)  
+dev | [![Build Status](https://github.com/gildas/go-request/actions/workflows/go.yml/badge.svg?branch=dev)](https://github.com/gildas/go-request/actions) | [![coverage](https://codecov.io/gh/gildas/go-request/branch/dev/graph/badge.svg)](https://codecov.io/gh/gildas/go-request)  
 
 ## Usage
 
