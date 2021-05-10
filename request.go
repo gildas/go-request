@@ -193,7 +193,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 						req.Body = reqContent.Reader
 						continue
 					}
-					return nil, errors.Wrapf(errors.HTTPStatusRequestTimeout, "Giving up after %d attempts", options.Attempts)
+					break
 				} else {
 					log.Errorf("URL Error, temporary=%t, timeout=%t, unwrap=%s", urlErr.Temporary(), urlErr.Timeout(), urlErr.Unwrap(), err)
 					return nil, errors.WithStack(err)
