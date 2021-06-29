@@ -86,6 +86,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		options.RequestBodyLogSize = 0
 	}
 
+	log.Tracef("HTTP %s %s", options.Method, options.URL.String())
 	reqContent, err := buildRequestContent(log, options)
 	if err != nil {
 		return nil, err // err is already decorated
@@ -170,7 +171,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 	}
 	// Sending the request...
 	for attempt := 0; attempt < options.Attempts; attempt++ {
-		log.Tracef("HTTP %s %s #%d/%d", req.Method, req.URL.String(), attempt, options.Attempts)
+		log.Tracef("Attempt #%d/%d", attempt, options.Attempts)
 		req.Header.Set("X-Attempt", strconv.Itoa(attempt+1))
 		log.Tracef("Request Headers: %#v", req.Header)
 		start := time.Now()
