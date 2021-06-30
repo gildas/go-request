@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/logging v1.4.2 // indirect
 	github.com/gildas/go-core v0.4.9
 	github.com/gildas/go-errors v0.1.1
-	github.com/gildas/go-logger v1.3.8
+	github.com/gildas/go-logger v1.3.10
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/uuid v1.2.0
 	github.com/joho/godotenv v1.3.0
