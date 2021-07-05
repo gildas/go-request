@@ -129,6 +129,23 @@ func (suite *RequestSuite) TestCanSendRequestWithHeaders() {
 	suite.Assert().Equal("body", string(content.Data))
 }
 
+func (suite *RequestSuite) TestCanSendRequestWithCookies() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	reader, err := request.Send(&request.Options{
+		URL: serverURL,
+		Cookies: []*http.Cookie{
+			{Name: "Test", Value: "1234", Secure: true, HttpOnly: true},
+		},
+		Logger: suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("body", string(content.Data))
+}
+
 func (suite *RequestSuite) TestCanSendRequestWithQueryParameters() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	reader, err := request.Send(&request.Options{
@@ -688,8 +705,8 @@ func (suite *RequestSuite) TestShouldFailWithBadRedirectLocation() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/bad_redirect")
 	_, err := request.Send(&request.Options{
-		URL:      serverURL,
-		Logger:   suite.Logger,
+		URL:    serverURL,
+		Logger: suite.Logger,
 	}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
 	var details *url.Error
@@ -818,7 +835,7 @@ func (suite *RequestSuite) SetupSuite() {
 	_ = godotenv.Load()
 	suite.Name = strings.TrimSuffix(reflect.TypeOf(*suite).Name(), "Suite")
 	suite.Logger = logger.Create("test",
-	  &logger.FileStream{
+		&logger.FileStream{
 			Path:        fmt.Sprintf("./log/test-%s.log", strings.ToLower(suite.Name)),
 			Unbuffered:  true,
 			FilterLevel: logger.TRACE,

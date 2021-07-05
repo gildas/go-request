@@ -13,19 +13,21 @@ import (
 
 // Content defines some content
 type Content struct {
-	Type    string      `json:"contentType"`
-	URL     *url.URL    `json:"contentUrl"`
-	Length  int64       `json:"contentLength"`
-	Data    []byte      `json:"contentData"`
-	Headers http.Header `json:"contentHeaders"`
+	Type    string         `json:"contentType"`
+	URL     *url.URL       `json:"contentUrl"`
+	Length  int64          `json:"contentLength"`
+	Data    []byte         `json:"contentData"`
+	Headers http.Header    `json:"contentHeaders"`
+	Cookies []*http.Cookie `json:"cookies"`
 }
 
 // ContentReader defines a content Reader (like data from an HTTP request)
 type ContentReader struct {
-	Type    string        `json:"contentType"`
-	Length  int64         `json:"contentLength"`
-	Reader  io.ReadCloser `json:"-"`
-	Headers http.Header   `json:"contentHeaders"`
+	Type    string         `json:"contentType"`
+	Length  int64          `json:"contentLength"`
+	Reader  io.ReadCloser  `json:"-"`
+	Headers http.Header    `json:"contentHeaders"`
+	Cookies []*http.Cookie `json:"cookies"`
 }
 
 // ContentWithData instantiates a Content from a simple byte array
@@ -43,6 +45,8 @@ func ContentWithData(data []byte, options ...interface{}) *Content {
 			content.Length = int64(l)
 		} else if h, ok := option.(http.Header); ok {
 			content.Headers = h
+		} else if c, ok := option.([]*http.Cookie); ok {
+			content.Cookies = c
 		}
 	}
 	if content.Length == 0 {
@@ -68,6 +72,7 @@ func (reader ContentReader) ReadContent(options ...interface{}) (*Content, error
 	options = append(options, reader.Type)
 	options = append(options, reader.Length)
 	options = append(options, reader.Headers)
+	options = append(options, reader.Cookies)
 	return ContentFromReader(reader, options...)
 }
 
@@ -89,6 +94,7 @@ func (content *Content) Reader() *ContentReader {
 		Type:    content.Type,
 		Length:  content.Length,
 		Headers: content.Headers,
+		Cookies: content.Cookies,
 		Reader:  ioutil.NopCloser(bytes.NewReader(content.Data)),
 	}
 	if reader.Length == 0 {
