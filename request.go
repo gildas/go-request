@@ -31,6 +31,7 @@ type Options struct {
 	URL                  *url.URL
 	Proxy                *url.URL
 	Headers              map[string]string
+	Cookies              []*http.Cookie
 	Parameters           map[string]string
 	Accept               string
 	PayloadType          string // if not provided, it is computed. payload==struct => json, payload==map => form
@@ -158,6 +159,12 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		req.Header.Set(key, value)
 	}
 
+	if len(options.Cookies) > 0 {
+		for _, cookie := range options.Cookies {
+			req.AddCookie(cookie)
+		}
+	}
+
 	httpclient := http.Client{
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
 			log.Tracef("Following WEB Link: %s", r.URL.Path)
@@ -204,7 +211,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		log.Tracef("Response Headers: %#v", res.Header)
 
 		// Reading the response body
-		resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header)
+		resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies())
 		if err != nil {
 			log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
 			return nil, err                                           // err is already "decorated" by ContentReader

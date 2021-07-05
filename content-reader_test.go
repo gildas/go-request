@@ -50,6 +50,19 @@ func TestCanCreateContentWithLength64(t *testing.T) {
 	assert.Equal(t, data[0], content.Data[0])
 }
 
+func TestCanCreateContentWithCookies(t *testing.T) {
+	data := []byte{1, 2, 3, 4, 5}
+	url, _ := url.Parse("https://www.acme.com")
+	cookies := []*http.Cookie{{Name: "Test", Value: "1234", Secure: true, HttpOnly: true}}
+	content := request.ContentWithData(data, url, cookies)
+	require.NotNil(t, content, "Content should not be nil")
+	assert.Equal(t, int64(len(data)), content.Length)
+	assert.Equal(t, data[0], content.Data[0])
+	assert.Equal(t, url, content.URL)
+	assert.Equal(t, 1, len(content.Cookies))
+	assert.Equal(t, "Test", content.Cookies[0].Name)
+}
+
 func TestCanCreateContentFromReader(t *testing.T) {
 	data := bytes.NewBuffer([]byte{1, 2, 3, 4, 5})
 	content, err := request.ContentFromReader(data)
@@ -112,7 +125,7 @@ func TestContentReaderCanUnmarshallData(t *testing.T) {
 }
 
 func TestShouldFailUnmarshallContentReaderWithBogusReader(t *testing.T) {
-	reader := request.ContentReader{"application/json", 0, failingReader(0), http.Header{}}
+	reader := request.ContentReader{"application/json", 0, failingReader(0), http.Header{}, nil}
 	data := stuff{}
 	err := reader.UnmarshalContentJSON(&data)
 	require.NotNil(t, err, "Should fail unmarshal content")
@@ -120,7 +133,7 @@ func TestShouldFailUnmarshallContentReaderWithBogusReader(t *testing.T) {
 }
 
 func TestShouldFailUnmarshallContentReaderWithBogusData(t *testing.T) {
-	reader := request.ContentReader{"application/json", 0, ioutil.NopCloser(bytes.NewBufferString(`{"ID": 1234}`)), http.Header{}}
+	reader := request.ContentReader{"application/json", 0, ioutil.NopCloser(bytes.NewBufferString(`{"ID": 1234}`)), http.Header{}, nil}
 	data := stuff{}
 	err := reader.UnmarshalContentJSON(&data)
 	require.NotNil(t, err, "Should fail unmarshal content")
