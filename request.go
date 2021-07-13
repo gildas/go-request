@@ -79,7 +79,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 	}
 
 	// without a logger, let's log into the "void"
-	log := logger.Create("request", options.Logger).Child("", "request", "reqid", options.RequestID)
+	log := logger.Create("request", options.Logger).Child(nil, "request", "reqid", options.RequestID)
 
 	if options.RequestBodyLogSize == 0 {
 		options.RequestBodyLogSize = DefaultRequestBodyLogSize
