@@ -167,7 +167,10 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 
 	httpclient := http.Client{
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
-			log.Tracef("Following WEB Link: %s", r.URL.Path)
+			log.Tracef("Following WEB Link: %s,\n query: %s", r.URL.EscapedPath(), r.URL.RawQuery)
+			for _, v := range via {
+				log.Tracef("Via: %s", v.URL)
+			}
 			return nil
 		},
 		Timeout: options.Timeout,
