@@ -25,7 +25,8 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 
 		switch req.Method {
 		case http.MethodPost:
-			switch req.URL.Path {
+			log.Debugf("Checking Path: %s", req.URL.Path)
+			switch strings.ToLower(req.URL.Path) {
 			case "/items":
 				items := []stuff{}
 
@@ -171,24 +172,48 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				if _, err := res.Write([]byte(fmt.Sprintf("%d", len(items)))); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
-			case "/redirect":
-				res.Header().Add("Location", "/")
-				res.WriteHeader(http.StatusSeeOther)
-				// res.WriteHeader(http.StatusFound)
-				log.Infof("Redirecting to /")
 			default:
 				if _, err := res.Write([]byte("body")); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
 			}
 		case http.MethodGet:
-			switch req.URL.Path {
+			log.Debugf("Checking Path: %s, raw: %s", req.URL.Path, req.URL.EscapedPath())
+			switch strings.ToLower(req.URL.Path) {
 			case "/":
 				if _, err := res.Write([]byte("body")); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
 			case "/audio.mp3":
 				res.Header().Add("Content-Type", "application/octet-stream")
+				if _, err := res.Write([]byte(`body`)); err != nil {
+					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+				}
+			// case "/bo%C3%AEte.png":
+			case "/boîte.png":
+				signature := req.URL.Query().Get("X-Amz-Signature")
+				if signature != "853f1611536e57902b0fcabd36e7fbe77fe2278f40a0aeed4116953ea6ef4873" {
+					log.Errorf("Request is missing signature in the query")
+					res.Header().Add("Content-Type", "application/json")
+					res.WriteHeader(http.StatusForbidden)
+					if _, err := res.Write([]byte(`{"error": "error.signature.missing"}`)); err != nil {
+						log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+					}
+					return
+				}
+				/*
+				id := req.Header.Get("X-Amz-Cf-Id")
+				if id != "1233453567abcdef" {
+					log.Errorf("Request is missing Header X-Amz-Cf-Id")
+					res.Header().Add("Content-Type", "application/json")
+					res.WriteHeader(http.StatusForbidden)
+					if _, err := res.Write([]byte(`{"error": "error.id.missing"}`)); err != nil {
+						log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+					}
+					return
+				}
+				*/
+				res.Header().Add("Content-Type", "image/png")
 				if _, err := res.Write([]byte(`body`)); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
@@ -223,9 +248,21 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 					return
 				}
 			case "/redirect":
-				res.Header().Add("Location", "/")
-				res.WriteHeader(http.StatusFound)
-				log.Infof("Redirecting to /")
+				queryString := "response-content-disposition=attachment%3Bfilename%3D%22Bo%C3%AEte-Vitamine-C.jpg%22&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEAQaDmFwLW5vcnRoZWFzdC0xIkYwRAIgXwjLAgEAHaXF5ADwxHrr%2BGzy2g5P69h5y5e68hHwjzECIFGV5tHl%2FS8VSIVjsWkxwE5Ks9QlkmM2MIVnB5XD5OvUKo0ECO3%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQABoMNzY1NjI4OTg1NDcxIgz%2Bjt73UFcVYMCGvYQq4QO02iQHzW%2FH%2Fs8El%2BTPF0ekwyOpSN0rxQ6482INGSqGiW%2FELVFRayVTR9T1nbuZ74FVuDe2VYWHYOYPyfmaZiKAnh0cR1kQdSE2A6SUhhkG%2BW0KF1Sw0O5J33f43fvhQYqcj%2FIAMTUB8FuVAN03hNYPQck83F%2FjuGYepPJ7AZGHix%2FYtUAB18Wq%2B3idKOS1abya0wV5pS9PSYK2hnt2pDMu82U2rjhNciQpAwBYIt%2FgGmQ1KQ3YGa8hpp5%2BBMC%2FDHletUEo257cAhZzwMOO3uyhK%2FVC1%2Fc3vthmA9EuWXpnbMXXGykZh7Ya26ookMSRXj10Fsz%2BGSe%2Fyan4vePUuwvTS6aozvL7KxoSs6wxD8pAzQRKkn1lf0i6Xzip461xAy8X0YowwxGE8XPzGcLztxgi7L5ef7NI3IzMphWkwH4QMiBD4D7ptGoE16j2zflmXkXNBPH9IBA1KJ%2Bqv1g6Olmrav19oWMDmVoQWD8%2FW%2BYBEobNOAPUJ6hfppxpinuAPMf1uIueFQrgwY58y3vy6WuMQmvjaIIu2u2QqSqH%2BK3SA3AIzcrEmoEub6OxO5Kge8LroqKr18LK2MNj4ZGzgPRrG%2F3aEIT7y0OHqBMF4TUCBFpwPwpuQz6f9yjKhqlZxypBMJ%2BDtocGOqYBoNa1X%2B6yOM2qg7T%2BtP8UNOFw4vZN73svJWhiqXe9lQhdwPvfRFIhrgIdlbvym3eSBD4C%2FyxtxWr9E4lxyFPfW3a6fV%2B7kl1aPjaE85LgVBJ2EGQ4bm1jNwQ1WGIQo%2FYlKBRC5f%2BekV64pv0ol6BQRwOF%2B9mXHRPigu64LVRTgRQBhgrneLEa00GS%2Bur3Nt1yPmTVWvMIoO0%2FBNM0VbBXsbtePl5ozQ%3D%3D&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20210713T123747Z&X-Amz-SignedHeaders=host&X-Amz-Expires=3600&X-Amz-Credential=ASIA3EQYLGB7Q6I4XLIG%2F20210713%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Signature=853f1611536e57902b0fcabd36e7fbe77fe2278f40a0aeed4116953ea6ef4873"
+				res.Header().Add("Cache-Control", "no-cache")
+				res.Header().Add("Cache-Control", "no-store")
+				res.Header().Add("Cache-Control", "must-revalidate")
+				res.Header().Add("Connection", "keep-alive")
+				res.Header().Add("Content-Length", "0")
+				res.Header().Add("Expires", "0")
+				res.Header().Add("Strict-Transport-Security", "max-age=600; includeSubDomains")
+				res.Header().Add("Location", "/Bo%C3%AEte.png?" + queryString)
+				res.Header().Add("Via", "1.1 d4ecead8ac7dbeef7cdfe1233455668f.cloudfront.net (CloudFront)")
+				res.Header().Add("X-Amz-Cf-Id", "1233453567abcdef")
+				res.Header().Add("X-Amz-Cf-Pop", "NRT20-C2")
+				res.Header().Add("X-Cache", "Miss form cloudfront")
+				res.WriteHeader(http.StatusSeeOther)
+				log.Infof("Redirecting to /Bo%%C3%%AEte.png")
 			case "/bad_redirect":
 				res.Header().Add("Location", "") // This is on purpose to check if the client handles this error well
 				res.WriteHeader(http.StatusFound)
