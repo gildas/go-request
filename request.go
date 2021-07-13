@@ -79,7 +79,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 	}
 
 	// without a logger, let's log into the "void"
-	log := logger.Create("request", options.Logger).Child("", "request", "reqid", options.RequestID)
+	log := logger.Create("request", options.Logger).Child(nil, "request", "reqid", options.RequestID)
 
 	if options.RequestBodyLogSize == 0 {
 		options.RequestBodyLogSize = DefaultRequestBodyLogSize
@@ -167,8 +167,10 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 
 	httpclient := http.Client{
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
-			log.Tracef("Following WEB Link: %s", r.URL.Path)
-			r.URL.Opaque = r.URL.Path
+			log.Tracef("Following WEB Link: %s,\n query: %s", r.URL.EscapedPath(), r.URL.RawQuery)
+			for _, v := range via {
+				log.Tracef("Via: %s", v.URL)
+			}
 			return nil
 		},
 		Timeout: options.Timeout,
