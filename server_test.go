@@ -45,7 +45,7 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 					}
 					if len(items) < 1 {
 						log.Errorf(("Not enough items to add"))
-						core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("items").WithStack())
+						core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("items"))
 						return
 					}
 					log.Infof("Adding #%d items", len(items))
@@ -82,7 +82,7 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				log.Infof("Request body: %s, %d bytes: \n%s", reqContent.Type, reqContent.Length, string(reqContent.Data))
 				if reqContent.Length == 0 {
 					log.Errorf("Content is empty")
-					core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("body").WithStack())
+					core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("body"))
 					return
 				}
 				item := struct{ ID string }{}
@@ -118,7 +118,7 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				_log.Infof("Request body: %s, %d bytes: \n%s", reqContent.Type, reqContent.Length, string(reqContent.Data))
 				if reqContent.Length == 0 {
 					_log.Errorf("Content is empty")
-					core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("body").WithStack())
+					core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("body"))
 					return
 				}
 				item := struct{ ID string }{}
@@ -160,12 +160,12 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 					log.Debugf("File header=%s", fileHeader.Header)
 					if fileHeader.Header.Get("Content-Type") != "image/png" {
 						log.Errorf("Attachment is not a PNG image")
-						core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentInvalid.With("Content-Type", fileHeader.Header.Get("Content-Type")).WithStack())
+						core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentInvalid.With("Content-Type", fileHeader.Header.Get("Content-Type")))
 						return
 					}
 					if fileHeader.Size == 0 {
 						log.Errorf("Attachment is empty")
-						core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("body").WithStack())
+						core.RespondWithError(res, http.StatusBadRequest, errors.ArgumentMissing.With("body"))
 						return
 					}
 				}

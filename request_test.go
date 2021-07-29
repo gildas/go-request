@@ -534,7 +534,7 @@ func (suite *RequestSuite) TestShouldFailSendingWithMissingURL() {
 	_, err := request.Send(&request.Options{}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
 	suite.Assert().True(errors.Is(err, errors.ArgumentMissing), "error should be an Argument Missing error, error: %+v", err)
-	var details *errors.Error
+	var details errors.Error
 	suite.Require().True(errors.As(err, &details), "Error chain should contain an errors.Error")
 	suite.Assert().Equal("URL", details.What, "Error's What is wrong")
 }

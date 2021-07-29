@@ -138,7 +138,7 @@ func TestShouldFailUnmarshallContentReaderWithBogusData(t *testing.T) {
 	err := reader.UnmarshalContentJSON(&data)
 	require.NotNil(t, err, "Should fail unmarshal content")
 	assert.Truef(t, errors.Is(err, errors.JSONUnmarshalError), "Error should be a JSON Unmarshal Error")
-	var details *errors.Error
+	var details errors.Error
 	require.True(t, errors.As(err, &details), "Error chain should contain an errors.Error")
 	assert.Equal(t, "error.json.unmarshal", details.ID, "Error's ID is wrong (%s)", details.ID)
 }
