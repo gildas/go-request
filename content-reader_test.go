@@ -171,3 +171,30 @@ func TestContentShouldHaveSamePropertiesAsContentReader(t *testing.T) {
 	assert.Equal(t, reader.Type, another.Type, "Content does not have the same type as the ContentReader")
 	assert.Equal(t, reader.Length, another.Length, "Content does not have the same length as the ContentReader")
 }
+
+func TestContentShouldLogBinaryContent(t *testing.T) {
+	data := []byte{1, 2, 3, 4, 5}
+	content := request.ContentWithData(data)
+	require.NotNil(t, content, "Content should not be nil")
+	content.Type = "image/png"
+
+	assert.Equal(t, "image/png, 5 bytes: 0102030405", content.LogString(10))
+}
+
+func TestContentShouldLogTextContent(t *testing.T) {
+	data := []byte("Hello")
+	content := request.ContentWithData(data)
+	require.NotNil(t, content, "Content should not be nil")
+	content.Type = "text/plain"
+
+	assert.Equal(t, "text/plain, 5 bytes: Hello", content.LogString(10))
+}
+
+func TestContentShouldLogJSONContent(t *testing.T) {
+	data := []byte(`{"data": "Hello"}`)
+	content := request.ContentWithData(data)
+	require.NotNil(t, content, "Content should not be nil")
+	content.Type = "application/json"
+
+	assert.Equal(t, `application/json, 17 bytes: {"data": "Hello"}`, content.LogString(20))
+}

@@ -2,11 +2,15 @@ package request
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/gildas/go-errors"
 )
@@ -101,6 +105,26 @@ func (content *Content) Reader() *ContentReader {
 		reader.Length = int64(len(content.Data))
 	}
 	return reader
+}
+
+func (content Content) LogString(maxSize uint64) string {
+	sb := strings.Builder{}
+	sb.WriteString(content.Type)
+	sb.WriteString(", ")
+	sb.WriteString(strconv.FormatInt(content.Length, 10))
+	sb.WriteString(" bytes")
+	if maxSize > 0 {
+		sb.WriteString(": ")
+		switch {
+		case content.Type == "application/json":
+			fallthrough
+		case strings.HasPrefix(content.Type, "text/"):
+			sb.WriteString(string(content.Data[:int(math.Min(float64(maxSize), float64(content.Length)))]))
+		default:
+			sb.WriteString(hex.EncodeToString(content.Data[:int(math.Min(float64(maxSize), float64(content.Length)))]))
+		}
+	}
+	return sb.String()
 }
 
 func (reader ContentReader) Read(data []byte) (int, error) {

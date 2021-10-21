@@ -87,6 +87,10 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		options.RequestBodyLogSize = 0
 	}
 
+	if len(options.UserAgent) == 0 {
+		options.UserAgent = "Request " + VERSION
+	}
+
 	log.Tracef("HTTP %s %s", options.Method, options.URL.String())
 	reqContent, err := buildRequestContent(log, options)
 	if err != nil {
@@ -145,6 +149,9 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 	// Setting request headers
 	req.Header.Set("User-Agent", options.UserAgent)
 	req.Header.Set("Accept", options.Accept)
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Add("Accept-Encoding", "deflate")
+	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("X-Request-Id", options.RequestID)
 	if len(options.Authorization) > 0 {
 		req.Header.Set("Authorization", options.Authorization)
@@ -237,11 +244,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 				}
 			}
 		}
-		if options.ResponseBodyLogSize > 0 {
-			log.Tracef("Response body: %s, %d bytes: \n%s", resContent.Type, resContent.Length, string(resContent.Data[:int(math.Min(float64(options.ResponseBodyLogSize), float64(resContent.Length)))]))
-		} else {
-			log.Tracef("Response body: %s, %d bytes", resContent.Type, resContent.Length)
-		}
+		log.Tracef("Response body: %s", resContent.LogString(uint64(options.ResponseBodyLogSize)))
 
 		// Processing the status
 		if res.StatusCode >= 400 {
@@ -274,8 +277,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 	// Analyze payload
 	if options.Payload == nil {
 		if options.Attachment == nil {
-			content := Content{}
-			return content.Reader(), nil
+			return &ContentReader{}, nil
 		}
 		// We have an attachment, so the user meant it to be the payload
 		options.Payload = options.Attachment
