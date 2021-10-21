@@ -277,8 +277,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 	// Analyze payload
 	if options.Payload == nil {
 		if options.Attachment == nil {
-			content := Content{}
-			return content.Reader(), nil
+			return &ContentReader{}, nil
 		}
 		// We have an attachment, so the user meant it to be the payload
 		options.Payload = options.Attachment
