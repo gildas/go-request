@@ -237,11 +237,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 				}
 			}
 		}
-		if options.ResponseBodyLogSize > 0 {
-			log.Tracef("Response body: %s, %d bytes: \n%s", resContent.Type, resContent.Length, string(resContent.Data[:int(math.Min(float64(options.ResponseBodyLogSize), float64(resContent.Length)))]))
-		} else {
-			log.Tracef("Response body: %s, %d bytes", resContent.Type, resContent.Length)
-		}
+		log.Tracef("Response body: %s", resContent.LogString(uint64(options.ResponseBodyLogSize)))
 
 		// Processing the status
 		if res.StatusCode >= 400 {
