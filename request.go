@@ -331,6 +331,9 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		}
 		payload, err := json.Marshal(options.Payload)
 		if err != nil {
+			if errors.Is(err, errors.JSONMarshalError) {
+				return nil, err
+			}
 			return nil, errors.JSONMarshalError.Wrap(err)
 		}
 		if options.RequestBodyLogSize > 0 {
@@ -347,6 +350,9 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		}
 		payload, err := json.Marshal(options.Payload)
 		if err != nil {
+			if errors.Is(err, errors.JSONMarshalError) {
+				return nil, err
+			}
 			return nil, errors.JSONMarshalError.Wrap(err)
 		}
 		if options.RequestBodyLogSize > 0 {

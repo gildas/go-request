@@ -911,6 +911,76 @@ func (suite *RequestSuite) TestCanSendRequestWithContentPayloadAndOneTimeout() {
 	suite.Logger.Infof("Test finished")
 }
 
+type UnmarshableStuff struct {
+	ID string `json:"id"`
+}
+
+type UnmarshableBadStuff UnmarshableStuff
+
+func (stuff UnmarshableStuff) MarshalJSON() ([]byte, error) {
+	return nil, errors.JSONMarshalError.Wrap(errors.New("marshal error"))
+}
+
+func (stuff UnmarshableBadStuff) MarshalJSON() ([]byte, error) {
+	return nil, errors.New("marshal error")
+}
+
+func (suite *RequestSuite) TestShouldFailWithUnmarshableBadStuff() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	_, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: UnmarshableBadStuff{ID: "1234"},
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Warnf("Expected Error: %s", err)
+	suite.Assert().ErrorIs(err, errors.JSONMarshalError)
+	suite.Assert().Contains(err.Error(), "marshal error")
+}
+
+func (suite *RequestSuite) TestShouldFailWithUnmarshableStuff() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	_, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: UnmarshableStuff{ID: "1234"},
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Warnf("Expected Error: %s", err)
+	suite.Assert().ErrorIs(err, errors.JSONMarshalError)
+	suite.Assert().Contains(err.Error(), "marshal error")
+}
+
+func (suite *RequestSuite) TestShouldFailWithArrayOfUnmarshableBadStuff() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	_, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: []UnmarshableBadStuff{{"1"}, {"2"}, {"3"}},
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Warnf("Expected Error: %s", err)
+	suite.Assert().ErrorIs(err, errors.JSONMarshalError)
+	suite.Assert().Contains(err.Error(), "marshal error")
+}
+
+func (suite *RequestSuite) TestShouldFailWithArrayOfUnmarshableStuff() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	_, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: []UnmarshableStuff{{"1"}, {"2"}, {"3"}},
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Warnf("Expected Error: %s", err)
+	suite.Assert().ErrorIs(err, errors.JSONMarshalError)
+	suite.Assert().Contains(err.Error(), "marshal error")
+}
+
 // Suite Tools
 
 func (suite *RequestSuite) SetupSuite() {
