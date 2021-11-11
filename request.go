@@ -202,7 +202,9 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 						log.Errorf("Failed to send request after %s", duration, err)
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 						time.Sleep(options.InterAttemptDelay)
-						req.Body.Close()
+						if req.Body != nil {
+							req.Body.Close()
+						}
 						reqContent, _ := buildRequestContent(log, options)
 						req.Body = reqContent.Reader
 						continue
@@ -329,6 +331,9 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		}
 		payload, err := json.Marshal(options.Payload)
 		if err != nil {
+			if errors.Is(err, errors.JSONMarshalError) {
+				return nil, err
+			}
 			return nil, errors.JSONMarshalError.Wrap(err)
 		}
 		if options.RequestBodyLogSize > 0 {
@@ -345,6 +350,9 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		}
 		payload, err := json.Marshal(options.Payload)
 		if err != nil {
+			if errors.Is(err, errors.JSONMarshalError) {
+				return nil, err
+			}
 			return nil, errors.JSONMarshalError.Wrap(err)
 		}
 		if options.RequestBodyLogSize > 0 {

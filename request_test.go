@@ -533,7 +533,7 @@ func (suite *RequestSuite) TestCanSendRequestWithToken() {
 func (suite *RequestSuite) TestShouldFailSendingWithMissingURL() {
 	_, err := request.Send(&request.Options{}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
-	suite.Assert().True(errors.Is(err, errors.ArgumentMissing), "error should be an Argument Missing error, error: %+v", err)
+	suite.Assert().ErrorIs(err, errors.ArgumentMissing, "error should be an Argument Missing error, error: %+v", err)
 	var details errors.Error
 	suite.Require().True(errors.As(err, &details), "Error chain should contain an errors.Error")
 	suite.Assert().Equal("URL", details.What, "Error's What is wrong")
@@ -547,7 +547,7 @@ func (suite *RequestSuite) TestShouldFailSendingWithWrongURL() {
 		Logger: suite.Logger,
 	}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
-	suite.Assert().True(errors.Is(err, errors.HTTPNotFound), "error should be an HTTP Not Found error, error: %+v", err)
+	suite.Assert().ErrorIs(err, errors.HTTPNotFound, "error should be an HTTP Not Found error, error: %+v", err)
 }
 
 func (suite *RequestSuite) TestShouldFailSendingWithInvalidMethod() {
@@ -636,6 +636,24 @@ func (suite *RequestSuite) TestShouldFailSendingWitBogusAttachmentReader() {
 	suite.Assert().Contains(err.Error(), "Failed to write attachment to multipart form field file")
 }
 
+func (suite *RequestSuite) TestCanReceive() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/binary_data")
+	reader, err := request.Send(&request.Options{
+		URL:    serverURL,
+		Logger: suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	suite.Logger.Debugf("Received reader: %+v", reader)
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("application/octet-stream", content.Type)
+	suite.Assert().Equal("body", string(content.Data))
+	suite.Assert().Equal("custom-value", reader.Headers.Get("custom-header"), "The received content is missing some headers")
+}
+
 func (suite *RequestSuite) TestCanReceiveJPGType() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/bad_jpg_type")
@@ -653,13 +671,13 @@ func (suite *RequestSuite) TestCanReceiveJPGType() {
 	suite.Assert().Equal("image/jpeg", content.Type, "Type was not converted correctly")
 }
 
-func (suite *RequestSuite) TestCanReceiveTypeFromAccept() {
+func (suite *RequestSuite) TestCanReceiveWithAccept() {
 	serverURL, _ := url.Parse(suite.Server.URL)
-	serverURL, _ = serverURL.Parse("/data")
+	serverURL, _ = serverURL.Parse("/binary_data") // And we expect the binary data to be converted to our Accept
 	reader, err := request.Send(&request.Options{
 		URL:    serverURL,
-		Accept: "text/html",
 		Logger: suite.Logger,
+		Accept: "text/html",
 	}, nil)
 	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
 	suite.Require().NotNil(reader, "Content Reader should not be nil")
@@ -669,6 +687,19 @@ func (suite *RequestSuite) TestCanReceiveTypeFromAccept() {
 	suite.Assert().Equal("body", string(content.Data))
 	suite.Assert().Equal("text/html", reader.Type, "Type was not converted correctly")
 	suite.Assert().Equal("text/html", content.Type, "Type was not converted correctly")
+}
+
+func (suite *RequestSuite) TestShouldFailReceivingWithMismatchAttempt() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/text_data")
+	_, err := request.Send(&request.Options{
+		URL:    serverURL,
+		Accept: "application/pdf",
+		Logger: suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Failed sending request, err=%+v", err)
+	suite.Logger.Warnf("Expected Error: %s", err)
+	suite.Assert().ErrorIs(err, errors.HTTPStatusNotAcceptable)
 }
 
 func (suite *RequestSuite) TestCanReceiveTypeFromURL() {
@@ -688,11 +719,29 @@ func (suite *RequestSuite) TestCanReceiveTypeFromURL() {
 	suite.Assert().Equal("audio/mpeg3", content.Type, "Type was not converted correctly")
 }
 
-func (suite *RequestSuite) TestCanRetryRequest() {
+func (suite *RequestSuite) TestCanRetryReceivingRequest() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/retry")
 	_, err := request.Send(&request.Options{
 		URL:                  serverURL,
+		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
+		Attempts:             5,
+		Logger:               suite.Logger,
+		Timeout:              1 * time.Second,
+	}, nil)
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+}
+
+func (suite *RequestSuite) TestCanRetryPostingRequest() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/retry")
+	_, err := request.Send(&request.Options{
+		URL:                  serverURL,
+		Payload:              struct {
+			ID string `json:"id"`
+		}{
+			ID: "1234",
+		},
 		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
 		Attempts:             5,
 		Logger:               suite.Logger,
@@ -727,7 +776,7 @@ func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd1Attempt() {
 	end := time.Since(start)
 	suite.Require().NotNil(err, "Should have failed sending request")
 	suite.Logger.Infof("Expected error: %s", err.Error())
-	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeout), "error should be an HTTP Request Timeout error, error: %+v", err)
+	suite.Assert().ErrorIs(err, errors.HTTPStatusRequestTimeout, "error should be an HTTP Request Timeout error, error: %+v", err)
 	suite.Assert().LessOrEqual(int64(end), int64(2*time.Second), "The request lasted more than 2 second (%s)", end)
 }
 
@@ -744,11 +793,55 @@ func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd2Attempts() {
 	end := time.Since(start)
 	suite.Require().NotNil(err, "Should have failed sending request")
 	suite.Logger.Infof("Expected error: %s", err.Error())
-	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeout), "error should be an HTTP Request Timeout error, error: %+v", err)
+	suite.Assert().ErrorIs(err, errors.HTTPStatusRequestTimeout, "error should be an HTTP Request Timeout error, error: %+v", err)
 	suite.Assert().LessOrEqual(int64(end), int64(4*time.Second), "The request lasted more than 4 second (%s)", end)
 }
 
-func (suite *RequestSuite) TestShouldFailWithTooManyRetries() {
+func (suite *RequestSuite) TestShouldFailPostingWhenTimeoutAnd1Attempt() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/timeout")
+	start := time.Now()
+	_, err := request.Send(&request.Options{
+		URL:      serverURL,
+		Payload:  struct{
+			ID string `json:"id"`
+		}{
+			ID: "1",
+		},
+		Attempts: 1,
+		Logger:   suite.Logger,
+		Timeout:  1 * time.Second,
+	}, nil)
+	end := time.Since(start)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Infof("Expected error: %s", err.Error())
+	suite.Assert().ErrorIs(err, errors.HTTPStatusRequestTimeout, "error should be an HTTP Request Timeout error, error: %+v", err)
+	suite.Assert().LessOrEqual(int64(end), int64(2*time.Second), "The request lasted more than 2 second (%s)", end)
+}
+
+func (suite *RequestSuite) TestShouldFailPostingWhenTimeoutAnd2Attempts() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/timeout")
+	start := time.Now()
+	_, err := request.Send(&request.Options{
+		URL:      serverURL,
+		Payload:  struct{
+			ID string `json:"id"`
+		}{
+			ID: "1",
+		},
+		Attempts: 2,
+		Logger:   suite.Logger,
+		Timeout:  1 * time.Second,
+	}, nil)
+	end := time.Since(start)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Infof("Expected error: %s", err.Error())
+	suite.Assert().ErrorIs(err, errors.HTTPStatusRequestTimeout, "error should be an HTTP Request Timeout error, error: %+v", err)
+	suite.Assert().LessOrEqual(int64(end), int64(4*time.Second), "The request lasted more than 4 second (%s)", end)
+}
+
+func (suite *RequestSuite) TestShouldFailReceivingWithTooManyRetries() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/retry")
 	_, err := request.Send(&request.Options{
@@ -760,7 +853,27 @@ func (suite *RequestSuite) TestShouldFailWithTooManyRetries() {
 	}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
 	suite.Logger.Infof("Expected error: %s", err.Error())
-	suite.Assert().True(errors.Is(err, errors.HTTPServiceUnavailable), "error should be an HTTP Service Unavailable error, error: %+v", err)
+	suite.Assert().ErrorIs(err, errors.HTTPServiceUnavailable, "error should be an HTTP Service Unavailable error, error: %+v", err)
+}
+
+func (suite *RequestSuite) TestShouldFailPostingWithTooManyRetries() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/retry")
+	_, err := request.Send(&request.Options{
+		URL:                  serverURL,
+		Payload:              struct{
+			ID string `json:"id"`
+		}{
+				ID: "1",
+		},
+		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
+		Attempts:             2,
+		Logger:               suite.Logger,
+		Timeout:              1 * time.Second,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Infof("Expected error: %s", err.Error())
+	suite.Assert().ErrorIs(err, errors.HTTPServiceUnavailable, "error should be an HTTP Service Unavailable error, error: %+v", err)
 }
 
 func (suite *RequestSuite) TestShouldFailReceivingBadResponse() {
@@ -827,6 +940,76 @@ func (suite *RequestSuite) TestCanSendRequestWithContentPayloadAndOneTimeout() {
 	suite.Require().NotNil(content, "Content should not be nil")
 	suite.Assert().Equal("1234", string(content.Data))
 	suite.Logger.Infof("Test finished")
+}
+
+type UnmarshableStuff struct {
+	ID string `json:"id"`
+}
+
+type UnmarshableBadStuff UnmarshableStuff
+
+func (stuff UnmarshableStuff) MarshalJSON() ([]byte, error) {
+	return nil, errors.JSONMarshalError.Wrap(errors.New("marshal error"))
+}
+
+func (stuff UnmarshableBadStuff) MarshalJSON() ([]byte, error) {
+	return nil, errors.New("marshal error")
+}
+
+func (suite *RequestSuite) TestShouldFailWithUnmarshableBadStuff() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	_, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: UnmarshableBadStuff{ID: "1234"},
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Warnf("Expected Error: %s", err)
+	suite.Assert().ErrorIs(err, errors.JSONMarshalError)
+	suite.Assert().Contains(err.Error(), "marshal error")
+}
+
+func (suite *RequestSuite) TestShouldFailWithUnmarshableStuff() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	_, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: UnmarshableStuff{ID: "1234"},
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Warnf("Expected Error: %s", err)
+	suite.Assert().ErrorIs(err, errors.JSONMarshalError)
+	suite.Assert().Contains(err.Error(), "marshal error")
+}
+
+func (suite *RequestSuite) TestShouldFailWithArrayOfUnmarshableBadStuff() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	_, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: []UnmarshableBadStuff{{"1"}, {"2"}, {"3"}},
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Warnf("Expected Error: %s", err)
+	suite.Assert().ErrorIs(err, errors.JSONMarshalError)
+	suite.Assert().Contains(err.Error(), "marshal error")
+}
+
+func (suite *RequestSuite) TestShouldFailWithArrayOfUnmarshableStuff() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	_, err := request.Send(&request.Options{
+		URL:     serverURL,
+		Payload: []UnmarshableStuff{{"1"}, {"2"}, {"3"}},
+		Logger:  suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Warnf("Expected Error: %s", err)
+	suite.Assert().ErrorIs(err, errors.JSONMarshalError)
+	suite.Assert().Contains(err.Error(), "marshal error")
 }
 
 // Suite Tools
