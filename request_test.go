@@ -688,11 +688,29 @@ func (suite *RequestSuite) TestCanReceiveTypeFromURL() {
 	suite.Assert().Equal("audio/mpeg3", content.Type, "Type was not converted correctly")
 }
 
-func (suite *RequestSuite) TestCanRetryRequest() {
+func (suite *RequestSuite) TestCanRetryReceivingRequest() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/retry")
 	_, err := request.Send(&request.Options{
 		URL:                  serverURL,
+		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
+		Attempts:             5,
+		Logger:               suite.Logger,
+		Timeout:              1 * time.Second,
+	}, nil)
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+}
+
+func (suite *RequestSuite) TestCanRetryPostingRequest() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/retry")
+	_, err := request.Send(&request.Options{
+		URL:                  serverURL,
+		Payload:              struct {
+			ID string `json:"id"`
+		}{
+			ID: "1234",
+		},
 		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
 		Attempts:             5,
 		Logger:               suite.Logger,
@@ -748,11 +766,75 @@ func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd2Attempts() {
 	suite.Assert().LessOrEqual(int64(end), int64(4*time.Second), "The request lasted more than 4 second (%s)", end)
 }
 
-func (suite *RequestSuite) TestShouldFailWithTooManyRetries() {
+func (suite *RequestSuite) TestShouldFailPostingWhenTimeoutAnd1Attempt() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/timeout")
+	start := time.Now()
+	_, err := request.Send(&request.Options{
+		URL:      serverURL,
+		Payload:  struct{
+			ID string `json:"id"`
+		}{
+			ID: "1",
+		},
+		Attempts: 1,
+		Logger:   suite.Logger,
+		Timeout:  1 * time.Second,
+	}, nil)
+	end := time.Since(start)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Infof("Expected error: %s", err.Error())
+	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeout), "error should be an HTTP Request Timeout error, error: %+v", err)
+	suite.Assert().LessOrEqual(int64(end), int64(2*time.Second), "The request lasted more than 2 second (%s)", end)
+}
+
+func (suite *RequestSuite) TestShouldFailPostingWhenTimeoutAnd2Attempts() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/timeout")
+	start := time.Now()
+	_, err := request.Send(&request.Options{
+		URL:      serverURL,
+		Payload:  struct{
+			ID string `json:"id"`
+		}{
+			ID: "1",
+		},
+		Attempts: 2,
+		Logger:   suite.Logger,
+		Timeout:  1 * time.Second,
+	}, nil)
+	end := time.Since(start)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Infof("Expected error: %s", err.Error())
+	suite.Assert().True(errors.Is(err, errors.HTTPStatusRequestTimeout), "error should be an HTTP Request Timeout error, error: %+v", err)
+	suite.Assert().LessOrEqual(int64(end), int64(4*time.Second), "The request lasted more than 4 second (%s)", end)
+}
+
+func (suite *RequestSuite) TestShouldFailReceivingWithTooManyRetries() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/retry")
 	_, err := request.Send(&request.Options{
 		URL:                  serverURL,
+		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
+		Attempts:             2,
+		Logger:               suite.Logger,
+		Timeout:              1 * time.Second,
+	}, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Logger.Infof("Expected error: %s", err.Error())
+	suite.Assert().True(errors.Is(err, errors.HTTPServiceUnavailable), "error should be an HTTP Service Unavailable error, error: %+v", err)
+}
+
+func (suite *RequestSuite) TestShouldFailPostingWithTooManyRetries() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/retry")
+	_, err := request.Send(&request.Options{
+		URL:                  serverURL,
+		Payload:              struct{
+			ID string `json:"id"`
+		}{
+				ID: "1",
+		},
 		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
 		Attempts:             2,
 		Logger:               suite.Logger,

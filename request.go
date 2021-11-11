@@ -202,7 +202,9 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 						log.Errorf("Failed to send request after %s", duration, err)
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 						time.Sleep(options.InterAttemptDelay)
-						req.Body.Close()
+						if req.Body != nil {
+							req.Body.Close()
+						}
 						reqContent, _ := buildRequestContent(log, options)
 						req.Body = reqContent.Reader
 						continue
