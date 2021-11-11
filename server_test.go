@@ -235,8 +235,21 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				if _, err := res.Write([]byte(``)); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
-			case "/data":
-				res.Header().Add("Content-Type", "application/octet-stream")
+			case "/binary_data":
+				res.Header().Add("Custom-Header", "custom-value")
+				res.Header().Add("Content-Type", "application/octet-stream") // we want to force the content type
+				if _, err := res.Write([]byte(`body`)); err != nil {
+					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+				}
+			case "/text_data":
+				reqAccept := req.Header.Get("Accept")
+				log.Infof("Request Accept: %s", reqAccept)
+				if ! strings.Contains(reqAccept, "text/plain") {
+					res.WriteHeader(http.StatusNotAcceptable)
+					return
+				}
+				res.Header().Add("Custom-Header", "custom-value")
+				// Since we didn't set the content type, it will be computed by the framework (text/plain; charset=utf-8)
 				if _, err := res.Write([]byte(`body`)); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}

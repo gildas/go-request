@@ -636,6 +636,24 @@ func (suite *RequestSuite) TestShouldFailSendingWitBogusAttachmentReader() {
 	suite.Assert().Contains(err.Error(), "Failed to write attachment to multipart form field file")
 }
 
+func (suite *RequestSuite) TestCanReceive() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/binary_data")
+	reader, err := request.Send(&request.Options{
+		URL:    serverURL,
+		Logger: suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	suite.Logger.Debugf("Received reader: %+v", reader)
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("application/octet-stream", content.Type)
+	suite.Assert().Equal("body", string(content.Data))
+	suite.Assert().Equal("custom-value", reader.Headers.Get("custom-header"), "The received content is missing some headers")
+}
+
 func (suite *RequestSuite) TestCanReceiveJPGType() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/bad_jpg_type")
@@ -653,13 +671,13 @@ func (suite *RequestSuite) TestCanReceiveJPGType() {
 	suite.Assert().Equal("image/jpeg", content.Type, "Type was not converted correctly")
 }
 
-func (suite *RequestSuite) TestCanReceiveTypeFromAccept() {
+func (suite *RequestSuite) TestCanReceiveWithAccept() {
 	serverURL, _ := url.Parse(suite.Server.URL)
-	serverURL, _ = serverURL.Parse("/data")
+	serverURL, _ = serverURL.Parse("/binary_data") // And we expect the binary data to be converted to our Accept
 	reader, err := request.Send(&request.Options{
 		URL:    serverURL,
-		Accept: "text/html",
 		Logger: suite.Logger,
+		Accept: "text/html",
 	}, nil)
 	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
 	suite.Require().NotNil(reader, "Content Reader should not be nil")
@@ -669,6 +687,19 @@ func (suite *RequestSuite) TestCanReceiveTypeFromAccept() {
 	suite.Assert().Equal("body", string(content.Data))
 	suite.Assert().Equal("text/html", reader.Type, "Type was not converted correctly")
 	suite.Assert().Equal("text/html", content.Type, "Type was not converted correctly")
+}
+
+func (suite *RequestSuite) TestShouldFailReceivingWithMismatchAttempt() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/text_data")
+	_, err := request.Send(&request.Options{
+		URL:    serverURL,
+		Accept: "application/pdf",
+		Logger: suite.Logger,
+	}, nil)
+	suite.Require().NotNil(err, "Failed sending request, err=%+v", err)
+	suite.Logger.Warnf("Expected Error: %s", err)
+	suite.Assert().ErrorIs(err, errors.HTTPStatusNotAcceptable)
 }
 
 func (suite *RequestSuite) TestCanReceiveTypeFromURL() {

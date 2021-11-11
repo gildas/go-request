@@ -63,6 +63,20 @@ func TestCanCreateContentWithCookies(t *testing.T) {
 	assert.Equal(t, "Test", content.Cookies[0].Name)
 }
 
+func TestCanCreateContentWithHeaders(t *testing.T) {
+	data := []byte{1, 2, 3, 4, 5}
+	url, _ := url.Parse("https://www.acme.com")
+	header := http.Header{}
+	header.Set("Custom-Header", "custom-value")
+	content := request.ContentWithData(data, url, header)
+	require.NotNil(t, content, "Content should not be nil")
+	assert.Equal(t, int64(len(data)), content.Length)
+	assert.Equal(t, data[0], content.Data[0])
+	assert.Equal(t, url, content.URL)
+	require.NotNil(t, content.Headers)
+	assert.Equal(t, "custom-value", content.Headers.Get("Custom-Header"))
+}
+
 func TestCanCreateContentFromReader(t *testing.T) {
 	data := bytes.NewBuffer([]byte{1, 2, 3, 4, 5})
 	content, err := request.ContentFromReader(data)
