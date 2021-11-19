@@ -146,6 +146,10 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		return nil, errors.WithStack(err)
 	}
 
+	// Close indicates to close the connection or after sending this request and reading its response.
+	// setting this field prevents re-use of TCP connections between requests to the same hosts, as if Transport.DisableKeepAlives were set.
+	req.Close = true
+
 	// Setting request headers
 	req.Header.Set("User-Agent", options.UserAgent)
 	req.Header.Set("Accept", options.Accept)
@@ -187,7 +191,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 	}
 	// Sending the request...
 	for attempt := 0; attempt < options.Attempts; attempt++ {
-		log.Tracef("Attempt #%d/%d", attempt, options.Attempts)
+		log.Tracef("Attempt #%d/%d", attempt+1, options.Attempts)
 		req.Header.Set("X-Attempt", strconv.Itoa(attempt+1))
 		log.Tracef("Request Headers: %#v", req.Header)
 		start := time.Now()
@@ -197,9 +201,9 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		if err != nil {
 			urlErr := &url.Error{}
 			if errors.As(err, &urlErr) {
-				if urlErr.Timeout() {
+				if urlErr.Timeout() || urlErr.Temporary() || urlErr.Unwrap() == io.EOF {
 					if attempt+1 < options.Attempts {
-						log.Errorf("Failed to send request after %s", duration, err)
+						log.Warnf("Temporary failed to send request (duration: %s/%s), Error: %s", duration, options.Timeout, err.Error()) // we don't want the stack here
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 						time.Sleep(options.InterAttemptDelay)
 						if req.Body != nil {
