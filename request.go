@@ -201,9 +201,9 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		if err != nil {
 			urlErr := &url.Error{}
 			if errors.As(err, &urlErr) {
-				if urlErr.Timeout() {
+				if urlErr.Timeout() || urlErr.Temporary() || urlErr.Unwrap() == io.EOF {
 					if attempt+1 < options.Attempts {
-						log.Errorf("Failed to send request after %s", duration, err)
+						log.Warnf("Temporary failed to send request (duration: %s/%s), Error: %s", duration, options.Timeout, err.Error()) // we don't want the stack here
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 						time.Sleep(options.InterAttemptDelay)
 						if req.Body != nil {
