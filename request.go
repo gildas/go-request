@@ -146,6 +146,10 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		return nil, errors.WithStack(err)
 	}
 
+	// Close indicates to close the connection or after sending this request and reading its response.
+	// setting this field prevents re-use of TCP connections between requests to the same hosts, as if Transport.DisableKeepAlives were set.
+	req.Close = true
+
 	// Setting request headers
 	req.Header.Set("User-Agent", options.UserAgent)
 	req.Header.Set("Accept", options.Accept)
