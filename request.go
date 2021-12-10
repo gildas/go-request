@@ -197,11 +197,11 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		start := time.Now()
 		res, err := httpclient.Do(req)
 		duration := time.Since(start)
-		log = log.Record("duration", duration)
+		log = log.Record("duration", duration/time.Millisecond)
 		if err != nil {
 			urlErr := &url.Error{}
 			if errors.As(err, &urlErr) {
-				if urlErr.Timeout() || urlErr.Temporary() || urlErr.Unwrap() == io.EOF {
+				if urlErr.Timeout() || urlErr.Temporary() || urlErr.Unwrap() == io.EOF || errors.Is(err, context.DeadlineExceeded) {
 					if attempt+1 < options.Attempts {
 						log.Warnf("Temporary failed to send request (duration: %s/%s), Error: %s", duration, options.Timeout, err.Error()) // we don't want the stack here
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
