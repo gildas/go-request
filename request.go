@@ -197,7 +197,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		start := time.Now()
 		res, err := httpclient.Do(req)
 		duration := time.Since(start)
-		log = log.Record("duration", duration)
+		log = log.Record("duration", duration/time.Millisecond)
 		if err != nil {
 			urlErr := &url.Error{}
 			if errors.As(err, &urlErr) {
