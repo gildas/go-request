@@ -531,6 +531,15 @@ func (suite *RequestSuite) TestCanSendRequestWithToken() {
 	suite.Assert().Equal("body", string(content.Data))
 }
 
+func (suite *RequestSuite) TestShouldFailSendingWithoutOptions() {
+	_, err := request.Send(nil, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Assert().ErrorIs(err, errors.ArgumentMissing, "error should be an Argument Missing error, error: %+v", err)
+	var details errors.Error
+	suite.Require().True(errors.As(err, &details), "Error chain should contain an errors.Error")
+	suite.Assert().Equal("options", details.What, "Error's What is wrong")
+}
+
 func (suite *RequestSuite) TestShouldFailSendingWithMissingURL() {
 	_, err := request.Send(&request.Options{}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
