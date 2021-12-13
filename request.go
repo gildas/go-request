@@ -78,8 +78,14 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		options.RequestID = uuid.Must(uuid.NewRandom()).String()
 	}
 
-	// without a logger, let's log into the "void"
-	log := logger.Create("request", options.Logger).Child(nil, "request", "reqid", options.RequestID)
+	log := options.Logger
+	if log == nil {
+		log, err = logger.FromContext(options.Context)
+		if err != nil {
+			log = logger.Create("request") // without a logger, let's log into the "void"
+		}
+	}
+	log = log.Child(nil, "request", "reqid", options.RequestID)
 
 	if options.RequestBodyLogSize == 0 {
 		options.RequestBodyLogSize = DefaultRequestBodyLogSize
@@ -221,7 +227,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 			}
 			return nil, err
 		}
-		defer res.Body.Close()
+		defer res.Body.Close() // Well... this one will be called only when the func ends
 		log.Tracef("Response %s in %s", res.Status, duration)
 		log.Tracef("Response Headers: %#v", res.Header)
 

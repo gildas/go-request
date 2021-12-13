@@ -2,6 +2,7 @@ package request_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -1010,6 +1011,41 @@ func (suite *RequestSuite) TestShouldFailWithArrayOfUnmarshableStuff() {
 	suite.Logger.Warnf("Expected Error: %s", err)
 	suite.Assert().ErrorIs(err, errors.JSONMarshalError)
 	suite.Assert().Contains(err.Error(), "marshal error")
+}
+
+func (suite *RequestSuite) TestCanGetLoggerFromContext() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/binary_data")
+	reader, err := request.Send(&request.Options{
+		Context: suite.Logger.ToContext(context.Background()),
+		URL:     serverURL,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	suite.Logger.Debugf("Received reader: %+v", reader)
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("application/octet-stream", content.Type)
+	suite.Assert().Equal("body", string(content.Data))
+	suite.Assert().Equal("custom-value", reader.Headers.Get("custom-header"), "The received content is missing some headers")
+}
+
+func (suite *RequestSuite) TestCanSendRequestsWithoutLogger() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/binary_data")
+	reader, err := request.Send(&request.Options{
+		URL:     serverURL,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	suite.Logger.Debugf("Received reader: %+v", reader)
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("application/octet-stream", content.Type)
+	suite.Assert().Equal("body", string(content.Data))
+	suite.Assert().Equal("custom-value", reader.Headers.Get("custom-header"), "The received content is missing some headers")
 }
 
 // Suite Tools
