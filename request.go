@@ -68,85 +68,25 @@ const DefaultResponseBodyLogSize = 2048
 func Send(options *Options, results interface{}) (*ContentReader, error) {
 	var err error
 
-	if options.Context == nil {
-		options.Context = context.Background()
+	if err = normalizeOptions(options, results); err != nil {
+		return nil, err
 	}
-	if options.URL == nil {
-		return nil, errors.ArgumentMissing.With("URL")
-	}
-	if len(options.RequestID) == 0 {
-		options.RequestID = uuid.Must(uuid.NewRandom()).String()
-	}
+	log := options.Logger.Child(nil, "request", "reqid", options.RequestID, "method", options.Method)
 
-	log := options.Logger
-	if log == nil {
-		log, err = logger.FromContext(options.Context)
-		if err != nil {
-			log = logger.Create("request") // without a logger, let's log into the "void"
-		}
-	}
-	log = log.Child(nil, "request", "reqid", options.RequestID)
-
-	if options.RequestBodyLogSize == 0 {
-		options.RequestBodyLogSize = DefaultRequestBodyLogSize
-	} else if options.RequestBodyLogSize < 0 {
-		options.RequestBodyLogSize = 0
-	}
-
-	if len(options.UserAgent) == 0 {
-		options.UserAgent = "Request " + VERSION
-	}
-
-	log.Tracef("HTTP %s %s", options.Method, options.URL.String())
+	log.Debugf("HTTP %s %s", options.Method, options.URL.String())
 	reqContent, err := buildRequestContent(log, options)
 	if err != nil {
 		return nil, err // err is already decorated
 	}
-
 	if len(options.Method) == 0 {
 		if reqContent.Length > 0 {
 			options.Method = "POST"
 		} else {
 			options.Method = "GET"
 		}
+		log = log.Record("method", options.Method)
+		log.Tracef("Computed HTTP method: %s", options.Method)
 	}
-	log = log.Record("method", options.Method)
-
-	if len(options.Accept) == 0 {
-		if results != nil {
-			options.Accept = "application/json"
-		} else {
-			options.Accept = "*"
-		}
-	}
-
-	if options.Attempts < 1 {
-		options.Attempts = DefaultAttempts
-	}
-
-	if options.InterAttemptDelay < 1*time.Second {
-		options.InterAttemptDelay = time.Duration(DefaultInterAttemptDelay)
-	}
-
-	if options.ResponseBodyLogSize == 0 {
-		options.ResponseBodyLogSize = DefaultResponseBodyLogSize
-	} else if options.ResponseBodyLogSize < 0 {
-		options.ResponseBodyLogSize = 0
-	}
-
-	if options.Timeout == 0 {
-		options.Timeout = time.Duration(DefaultTimeout)
-	}
-
-	if options.Parameters != nil {
-		log.Tracef("Adding query parameters")
-		query := options.URL.Query()
-		for key, value := range options.Parameters {
-			query.Add(key, value)
-		}
-		options.URL.RawQuery = query.Encode()
-	}
-
 	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reqContent.Reader)
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -195,6 +135,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 	if options.Proxy != nil {
 		httpclient.Transport = &http.Transport{Proxy: http.ProxyURL(options.Proxy)}
 	}
+
 	// Sending the request...
 	for attempt := 0; attempt < options.Attempts; attempt++ {
 		log.Tracef("Attempt #%d/%d", attempt+1, options.Attempts)
@@ -282,6 +223,64 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 	}
 	// If we get here, there is an error
 	return nil, errors.Wrapf(errors.HTTPStatusRequestTimeout, "Giving up after %d attempts", options.Attempts)
+}
+
+func normalizeOptions(options *Options, results interface{}) (err error) {
+	if options == nil {
+		return errors.ArgumentMissing.With("options")
+	}
+	if options.URL == nil {
+		return errors.ArgumentMissing.With("URL")
+	}
+	if options.Context == nil {
+		options.Context = context.Background()
+	}
+	if options.Logger == nil {
+		options.Logger, err = logger.FromContext(options.Context)
+		if err != nil {
+			options.Logger = logger.Create("request") // without a logger, let's log into the "void"
+		}
+	}
+	if options.RequestBodyLogSize == 0 {
+		options.RequestBodyLogSize = DefaultRequestBodyLogSize
+	} else if options.RequestBodyLogSize < 0 {
+		options.RequestBodyLogSize = 0
+	}
+	if options.ResponseBodyLogSize == 0 {
+		options.ResponseBodyLogSize = DefaultResponseBodyLogSize
+	} else if options.ResponseBodyLogSize < 0 {
+		options.ResponseBodyLogSize = 0
+	}
+	if len(options.RequestID) == 0 {
+		options.RequestID = uuid.Must(uuid.NewRandom()).String()
+	}
+	if len(options.UserAgent) == 0 {
+		options.UserAgent = "Request " + VERSION
+	}
+	if len(options.Accept) == 0 {
+		if results != nil {
+			options.Accept = "application/json"
+		} else {
+			options.Accept = "*"
+		}
+	}
+	if options.Timeout == 0 {
+		options.Timeout = time.Duration(DefaultTimeout)
+	}
+	if options.Attempts < 1 {
+		options.Attempts = DefaultAttempts
+	}
+	if options.InterAttemptDelay < 1*time.Second {
+		options.InterAttemptDelay = time.Duration(DefaultInterAttemptDelay)
+	}
+	if options.Parameters != nil {
+		query := options.URL.Query()
+		for key, value := range options.Parameters {
+			query.Add(key, value)
+		}
+		options.URL.RawQuery = query.Encode()
+	}
+	return nil
 }
 
 // buildRequestContent builds a Content for the request
