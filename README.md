@@ -153,6 +153,18 @@ if err != nil {
 }
 ```
 
+It is also possible to download data directly to an `io.Writer`, thus avoiding memory consumption:
+```go
+writer, err := os.Create(filepath.Join("tmp", "data"))
+defer writer.Close()
+reader, err := request.Send(&request.Options{
+	URL:    serverURL,
+	Writer: writer,
+}, nil)
+log.Infof("Downloaded %d bytes", reader.Length)
+```
+In that case, the `ContentReader`'s data is an empty byte array. Its other properties are valid (like the size, mime type, etc)
+
 **Notes:**  
 - if the PayloadType is not mentioned, it is calculated when processing the Payload.
 - if the payload is a `ContentReader` or a `Content`, it is used directly.

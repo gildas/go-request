@@ -210,16 +210,16 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 					return
 				}
 				/*
-				id := req.Header.Get("X-Amz-Cf-Id")
-				if id != "1233453567abcdef" {
-					log.Errorf("Request is missing Header X-Amz-Cf-Id")
-					res.Header().Add("Content-Type", "application/json")
-					res.WriteHeader(http.StatusForbidden)
-					if _, err := res.Write([]byte(`{"error": "error.id.missing"}`)); err != nil {
-						log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+					id := req.Header.Get("X-Amz-Cf-Id")
+					if id != "1233453567abcdef" {
+						log.Errorf("Request is missing Header X-Amz-Cf-Id")
+						res.Header().Add("Content-Type", "application/json")
+						res.WriteHeader(http.StatusForbidden)
+						if _, err := res.Write([]byte(`{"error": "error.id.missing"}`)); err != nil {
+							log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+						}
+						return
 					}
-					return
-				}
 				*/
 				res.Header().Add("Content-Type", "image/png")
 				if _, err := res.Write([]byte(`body`)); err != nil {
@@ -244,7 +244,7 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 			case "/text_data":
 				reqAccept := req.Header.Get("Accept")
 				log.Infof("Request Accept: %s", reqAccept)
-				if ! strings.Contains(reqAccept, "text/plain") {
+				if !strings.Contains(reqAccept, "text/plain") {
 					res.WriteHeader(http.StatusNotAcceptable)
 					return
 				}
@@ -277,7 +277,7 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				res.Header().Add("Content-Length", "0")
 				res.Header().Add("Expires", "0")
 				res.Header().Add("Strict-Transport-Security", "max-age=600; includeSubDomains")
-				res.Header().Add("Location", "/Bo%C3%AEte.png?" + queryString)
+				res.Header().Add("Location", "/Bo%C3%AEte.png?"+queryString)
 				res.Header().Add("Via", "1.1 d4ecead8ac7dbeef7cdfe1233455668f.cloudfront.net (CloudFront)")
 				res.Header().Add("X-Amz-Cf-Id", "1233453567abcdef")
 				res.Header().Add("X-Amz-Cf-Pop", "NRT20-C2")

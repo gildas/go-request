@@ -2,12 +2,15 @@ package request_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -530,6 +533,15 @@ func (suite *RequestSuite) TestCanSendRequestWithToken() {
 	suite.Assert().Equal("body", string(content.Data))
 }
 
+func (suite *RequestSuite) TestShouldFailSendingWithoutOptions() {
+	_, err := request.Send(nil, nil)
+	suite.Require().NotNil(err, "Should have failed sending request")
+	suite.Assert().ErrorIs(err, errors.ArgumentMissing, "error should be an Argument Missing error, error: %+v", err)
+	var details errors.Error
+	suite.Require().True(errors.As(err, &details), "Error chain should contain an errors.Error")
+	suite.Assert().Equal("options", details.What, "Error's What is wrong")
+}
+
 func (suite *RequestSuite) TestShouldFailSendingWithMissingURL() {
 	_, err := request.Send(&request.Options{}, nil)
 	suite.Require().NotNil(err, "Should have failed sending request")
@@ -736,12 +748,10 @@ func (suite *RequestSuite) TestCanRetryPostingRequest() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/retry")
 	_, err := request.Send(&request.Options{
-		URL:                  serverURL,
-		Payload:              struct {
+		URL: serverURL,
+		Payload: struct {
 			ID string `json:"id"`
-		}{
-			ID: "1234",
-		},
+		}{ID: "1234"},
 		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
 		Attempts:             5,
 		Logger:               suite.Logger,
@@ -802,12 +812,10 @@ func (suite *RequestSuite) TestShouldFailPostingWhenTimeoutAnd1Attempt() {
 	serverURL, _ = serverURL.Parse("/timeout")
 	start := time.Now()
 	_, err := request.Send(&request.Options{
-		URL:      serverURL,
-		Payload:  struct{
+		URL: serverURL,
+		Payload: struct {
 			ID string `json:"id"`
-		}{
-			ID: "1",
-		},
+		}{ID: "1"},
 		Attempts: 1,
 		Logger:   suite.Logger,
 		Timeout:  1 * time.Second,
@@ -824,12 +832,10 @@ func (suite *RequestSuite) TestShouldFailPostingWhenTimeoutAnd2Attempts() {
 	serverURL, _ = serverURL.Parse("/timeout")
 	start := time.Now()
 	_, err := request.Send(&request.Options{
-		URL:      serverURL,
-		Payload:  struct{
+		URL: serverURL,
+		Payload: struct {
 			ID string `json:"id"`
-		}{
-			ID: "1",
-		},
+		}{ID: "1"},
 		Attempts: 2,
 		Logger:   suite.Logger,
 		Timeout:  1 * time.Second,
@@ -860,12 +866,10 @@ func (suite *RequestSuite) TestShouldFailPostingWithTooManyRetries() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/retry")
 	_, err := request.Send(&request.Options{
-		URL:                  serverURL,
-		Payload:              struct{
+		URL: serverURL,
+		Payload: struct {
 			ID string `json:"id"`
-		}{
-				ID: "1",
-		},
+		}{ID: "1"},
 		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
 		Attempts:             2,
 		Logger:               suite.Logger,
@@ -1012,6 +1016,61 @@ func (suite *RequestSuite) TestShouldFailWithArrayOfUnmarshableStuff() {
 	suite.Assert().Contains(err.Error(), "marshal error")
 }
 
+func (suite *RequestSuite) TestCanGetLoggerFromContext() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/binary_data")
+	reader, err := request.Send(&request.Options{
+		Context: suite.Logger.ToContext(context.Background()),
+		URL:     serverURL,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	suite.Logger.Debugf("Received reader: %+v", reader)
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("application/octet-stream", content.Type)
+	suite.Assert().Equal("body", string(content.Data))
+	suite.Assert().Equal("custom-value", reader.Headers.Get("custom-header"), "The received content is missing some headers")
+}
+
+func (suite *RequestSuite) TestCanSendRequestsWithoutLogger() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/binary_data")
+	reader, err := request.Send(&request.Options{
+		URL: serverURL,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	suite.Logger.Debugf("Received reader: %+v", reader)
+	content, err := reader.ReadContent()
+	suite.Require().Nil(err, "Failed reading response content, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("application/octet-stream", content.Type)
+	suite.Assert().Equal("body", string(content.Data))
+	suite.Assert().Equal("custom-value", reader.Headers.Get("custom-header"), "The received content is missing some headers")
+}
+
+func (suite *RequestSuite) TestCanSendRequestWithWriterStream() {
+	writer, err := os.Create(filepath.Join("tmp", "data"))
+	suite.Require().Nilf(err, "Failed creating file, err=%+v", err)
+	defer writer.Close()
+	suite.Logger.Memoryf("Before sending request")
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/binary_data")
+	reader, err := request.Send(&request.Options{
+		URL:    serverURL,
+		Writer: writer,
+		Logger: suite.Logger,
+	}, nil)
+	suite.Logger.Memoryf("After sending request")
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	suite.Logger.Debugf("Received reader: %+v", reader)
+	suite.Assert().Equal("application/octet-stream", reader.Type)
+	suite.Assert().Equal(int64(4), reader.Length)
+}
+
 // Suite Tools
 
 func (suite *RequestSuite) SetupSuite() {
@@ -1025,6 +1084,9 @@ func (suite *RequestSuite) SetupSuite() {
 		},
 	).Child("test", "test")
 	suite.Logger.Infof("Suite Start: %s %s", suite.Name, strings.Repeat("=", 80-14-len(suite.Name)))
+
+	err := os.MkdirAll("./tmp", 0755)
+	suite.Require().Nilf(err, "Failed creating tmp directory, err=%+v", err)
 
 	suite.Server = CreateTestServer(suite)
 	suite.Proxy = CreateTestProxy(suite)

@@ -114,14 +114,18 @@ func (content Content) LogString(maxSize uint64) string {
 	sb.WriteString(strconv.FormatInt(content.Length, 10))
 	sb.WriteString(" bytes")
 	if maxSize > 0 {
-		sb.WriteString(": ")
-		switch {
-		case content.Type == "application/json":
-			fallthrough
-		case strings.HasPrefix(content.Type, "text/"):
-			sb.WriteString(string(content.Data[:int(math.Min(float64(maxSize), float64(content.Length)))]))
-		default:
-			sb.WriteString(hex.EncodeToString(content.Data[:int(math.Min(float64(maxSize), float64(content.Length)))]))
+		if len(content.Data) > 0 {
+			sb.WriteString(": ")
+			switch {
+			case content.Type == "application/json":
+				fallthrough
+			case strings.HasPrefix(content.Type, "text/"):
+				sb.WriteString(string(content.Data[:int(math.Min(float64(maxSize), float64(content.Length)))]))
+			default:
+				sb.WriteString(hex.EncodeToString(content.Data[:int(math.Min(float64(maxSize), float64(content.Length)))]))
+			}
+		} else {
+			sb.WriteString(" stored in io.Writer")
 		}
 	}
 	return sb.String()
