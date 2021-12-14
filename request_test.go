@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -1049,6 +1051,26 @@ func (suite *RequestSuite) TestCanSendRequestsWithoutLogger() {
 	suite.Assert().Equal("custom-value", reader.Headers.Get("custom-header"), "The received content is missing some headers")
 }
 
+func (suite *RequestSuite) TestCanSendRequestWithWriterStream() {
+	writer, err := os.Create(filepath.Join("tmp", "data"))
+	suite.Require().Nilf(err, "Failed creating file, err=%+v", err)
+	defer writer.Close()
+	suite.Logger.Memoryf("Before sending request")
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/binary_data")
+	reader, err := request.Send(&request.Options{
+		URL:    serverURL,
+		Writer: writer,
+		Logger: suite.Logger,
+	}, nil)
+	suite.Logger.Memoryf("After sending request")
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(reader, "Content Reader should not be nil")
+	suite.Logger.Debugf("Received reader: %+v", reader)
+	suite.Assert().Equal("application/octet-stream", reader.Type)
+	suite.Assert().Equal(int64(4), reader.Length)
+}
+
 // Suite Tools
 
 func (suite *RequestSuite) SetupSuite() {
@@ -1062,6 +1084,9 @@ func (suite *RequestSuite) SetupSuite() {
 		},
 	).Child("test", "test")
 	suite.Logger.Infof("Suite Start: %s %s", suite.Name, strings.Repeat("=", 80-14-len(suite.Name)))
+
+	err := os.MkdirAll("./tmp", 0755)
+	suite.Require().Nilf(err, "Failed creating tmp directory, err=%+v", err)
 
 	suite.Server = CreateTestServer(suite)
 	suite.Proxy = CreateTestProxy(suite)

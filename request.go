@@ -41,6 +41,7 @@ type Options struct {
 	RequestID            string
 	UserAgent            string
 	RetryableStatusCodes []int
+	Writer               io.Writer
 	Attempts             int
 	InterAttemptDelay    time.Duration
 	Timeout              time.Duration
@@ -168,16 +169,46 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 			}
 			return nil, err
 		}
-		defer res.Body.Close() // Well... this one will be called only when the func ends
+		defer res.Body.Close()
 		log.Tracef("Response %s in %s", res.Status, duration)
 		log.Tracef("Response Headers: %#v", res.Header)
 
-		// Reading the response body
-		resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies())
-		if err != nil {
-			log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
-			return nil, err                                           // err is already "decorated" by ContentReader
+		// Processing the status
+		if res.StatusCode >= 400 {
+			if isRetryable(res.StatusCode, options.RetryableStatusCodes) {
+				if attempt+1 < options.Attempts {
+					log.Warnf("Retryable Response Status: %s", res.Status)
+					log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
+					time.Sleep(options.InterAttemptDelay)
+					continue
+				}
+			}
+			// Read the body to get the error message
+			resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies())
+			if err != nil {
+				return nil, errors.FromHTTPStatusCode(res.StatusCode)
+			}
+			return resContent.Reader(), errors.FromHTTPStatusCode(res.StatusCode)
 		}
+
+		// Reading the response body
+		var resContent *Content
+
+		if options.Writer != nil {
+			bytesRead, err := io.Copy(options.Writer, res.Body)
+			if err != nil {
+				return nil, errors.WithStack(err)
+			}
+			log.Tracef("Read %d bytes", bytesRead)
+			resContent = ContentWithData([]byte{}, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Cookies())
+		} else {
+			resContent, err = ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies())
+			if err != nil {
+				log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
+				return nil, err                                           // err is already "decorated" by ContentReader
+			}
+		}
+
 		// some servers give the wrong mime type for JPEG files
 		if resContent.Type == "image/jpg" {
 			resContent.Type = "image/jpeg"
@@ -198,19 +229,6 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 			}
 		}
 		log.Tracef("Response body: %s", resContent.LogString(uint64(options.ResponseBodyLogSize)))
-
-		// Processing the status
-		if res.StatusCode >= 400 {
-			if isRetryable(res.StatusCode, options.RetryableStatusCodes) {
-				if attempt+1 < options.Attempts {
-					log.Warnf("Retryable Response Status: %s", res.Status)
-					log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
-					time.Sleep(options.InterAttemptDelay)
-					continue
-				}
-			}
-			return resContent.Reader(), errors.FromHTTPStatusCode(res.StatusCode)
-		}
 
 		// Unmarshaling the response content if requested
 		if results != nil {
