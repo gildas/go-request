@@ -746,12 +746,10 @@ func (suite *RequestSuite) TestCanRetryPostingRequest() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/retry")
 	_, err := request.Send(&request.Options{
-		URL:                  serverURL,
-		Payload:              struct {
+		URL: serverURL,
+		Payload: struct {
 			ID string `json:"id"`
-		}{
-			ID: "1234",
-		},
+		}{ID: "1234"},
 		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
 		Attempts:             5,
 		Logger:               suite.Logger,
@@ -812,12 +810,10 @@ func (suite *RequestSuite) TestShouldFailPostingWhenTimeoutAnd1Attempt() {
 	serverURL, _ = serverURL.Parse("/timeout")
 	start := time.Now()
 	_, err := request.Send(&request.Options{
-		URL:      serverURL,
-		Payload:  struct{
+		URL: serverURL,
+		Payload: struct {
 			ID string `json:"id"`
-		}{
-			ID: "1",
-		},
+		}{ID: "1"},
 		Attempts: 1,
 		Logger:   suite.Logger,
 		Timeout:  1 * time.Second,
@@ -834,12 +830,10 @@ func (suite *RequestSuite) TestShouldFailPostingWhenTimeoutAnd2Attempts() {
 	serverURL, _ = serverURL.Parse("/timeout")
 	start := time.Now()
 	_, err := request.Send(&request.Options{
-		URL:      serverURL,
-		Payload:  struct{
+		URL: serverURL,
+		Payload: struct {
 			ID string `json:"id"`
-		}{
-			ID: "1",
-		},
+		}{ID: "1"},
 		Attempts: 2,
 		Logger:   suite.Logger,
 		Timeout:  1 * time.Second,
@@ -870,12 +864,10 @@ func (suite *RequestSuite) TestShouldFailPostingWithTooManyRetries() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/retry")
 	_, err := request.Send(&request.Options{
-		URL:                  serverURL,
-		Payload:              struct{
+		URL: serverURL,
+		Payload: struct {
 			ID string `json:"id"`
-		}{
-				ID: "1",
-		},
+		}{ID: "1"},
 		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
 		Attempts:             2,
 		Logger:               suite.Logger,
@@ -1044,7 +1036,7 @@ func (suite *RequestSuite) TestCanSendRequestsWithoutLogger() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/binary_data")
 	reader, err := request.Send(&request.Options{
-		URL:     serverURL,
+		URL: serverURL,
 	}, nil)
 	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
 	suite.Require().NotNil(reader, "Content Reader should not be nil")
