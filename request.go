@@ -200,7 +200,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 				return nil, errors.WithStack(err)
 			}
 			log.Tracef("Read %d bytes", bytesRead)
-			resContent = ContentWithData([]byte{}, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Cookies())
+			resContent = ContentWithData([]byte{}, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies())
 		} else {
 			resContent, err = ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies())
 			if err != nil {
