@@ -25,15 +25,6 @@ type Content struct {
 	Cookies []*http.Cookie `json:"cookies"`
 }
 
-// ContentReader defines a content Reader (like data from an HTTP request)
-type ContentReader struct {
-	Type    string         `json:"contentType"`
-	Length  int64          `json:"contentLength"`
-	Reader  io.ReadCloser  `json:"-"`
-	Headers http.Header    `json:"contentHeaders"`
-	Cookies []*http.Cookie `json:"cookies"`
-}
-
 // ContentWithData instantiates a Content from a simple byte array
 func ContentWithData(data []byte, options ...interface{}) *Content {
 	content := &Content{}
@@ -71,40 +62,22 @@ func ContentFromReader(reader io.Reader, options ...interface{}) (*Content, erro
 	return ContentWithData(data, options...), nil
 }
 
-// ReadContent instantiates a Content from an I/O reader
-func (reader ContentReader) ReadContent(options ...interface{}) (*Content, error) {
-	options = append(options, reader.Type)
-	options = append(options, reader.Length)
-	options = append(options, reader.Headers)
-	options = append(options, reader.Cookies)
-	return ContentFromReader(reader, options...)
+// Reader gets an io.Reader from this Content
+func (content *Content) Reader() io.Reader {
+	return ioutil.NopCloser(bytes.NewReader(content.Data))
+}
+
+// ReadCloser gets an io.ReadCloser from this Content
+func (content *Content) ReadCloser() io.ReadCloser {
+	return ioutil.NopCloser(bytes.NewReader(content.Data))
 }
 
 // UnmarshalContentJSON reads the content of an I/O reader and unmarshals it into JSON
-func (reader ContentReader) UnmarshalContentJSON(v interface{}) (err error) {
-	content, err := reader.ReadContent()
-	if err != nil {
-		return err // err is already decorated by ContentFromReader
-	}
+func (content Content) UnmarshalContentJSON(v interface{}) (err error) {
 	if err = json.Unmarshal(content.Data, &v); err != nil {
 		return errors.JSONUnmarshalError.Wrap(err)
 	}
 	return nil
-}
-
-// Reader gets a ContentReader from this Content
-func (content *Content) Reader() *ContentReader {
-	reader := &ContentReader{
-		Type:    content.Type,
-		Length:  content.Length,
-		Headers: content.Headers,
-		Cookies: content.Cookies,
-		Reader:  ioutil.NopCloser(bytes.NewReader(content.Data)),
-	}
-	if reader.Length == 0 {
-		reader.Length = int64(len(content.Data))
-	}
-	return reader
 }
 
 func (content Content) LogString(maxSize uint64) string {
@@ -124,13 +97,8 @@ func (content Content) LogString(maxSize uint64) string {
 			default:
 				sb.WriteString(hex.EncodeToString(content.Data[:int(math.Min(float64(maxSize), float64(content.Length)))]))
 			}
-		} else {
-			sb.WriteString(" stored in io.Writer")
 		}
 	}
+	sb.WriteString("")
 	return sb.String()
-}
-
-func (reader ContentReader) Read(data []byte) (int, error) {
-	return reader.Reader.Read(data)
 }

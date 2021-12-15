@@ -31,7 +31,7 @@ if err != nil {
 data := struct{Data string}{}
 err := res.UnmarshalContentJSON(&data)
 ```
-Here we send an HTTP GET request and unmarshal the response (a `ContentReader`).
+Here we send an HTTP GET request and unmarshal the response.
 
 It is also possible to let `request.Send` do the unmarshal for us:
 
@@ -40,51 +40,48 @@ data := struct{Data string}{}
 _, err := request.Send(&request.Options{
     URL: myURL,
 }, &data)
-if err != nil {
-    return err
-}
 ```
+In that case, the returned `Content`'s data is an empty byte array. Its other properties are valid (like the size, mime type, etc)
+
+You can also download data directly to an `io.Writer`:
+```go
+writer, err := os.Create(filepath.Join("tmp", "data"))
+defer writer.Close()
+res, err := request.Send(&request.Options{
+	URL:    serverURL,
+}, writer)
+log.Infof("Downloaded %d bytes", res.Length)
+```
+In that case, the returned `Content`'s data is an empty byte array. Its other properties are valid (like the size, mime type, etc)
 
 Authorization can be stored in the `Options.Authorization`:
 
 ```go
 payload := struct{Key string}{}
-data := struct{Data string}{}
-_, err := request.Send(&request.Options{
+res, err := request.Send(&request.Options{
     URL:           myURL,
     Authorization: request.BasicAuthorization("user", "password"),
-}, &data)
-if err != nil {
-    return err
-}
+}, nil)
 ```
 
 or, with a Bearer Token:  
 
 ```go
 payload := struct{Key string}{}
-data := struct{Data string}{}
-_, err := request.Send(&request.Options{
+res, err := request.Send(&request.Options{
     URL:           myURL,
     Authorization: request.BearerAuthorization("myTokenABCD"),
-}, &data)
-if err != nil {
-    return err
-}
+}, nil)
 ```
 
 Objects can be sent as payloads:
 
 ```go
 payload := struct{Key string}{}
-data := struct{Data string}{}
-_, err := request.Send(&request.Options{
+res, err := request.Send(&request.Options{
     URL:     myURL,
     Payload: payload,
-}, &data)
-if err != nil {
-    return err
-}
+}, nil)
 ```
 
 A payload will induce an HTTP POST unless mentioned.
@@ -93,40 +90,31 @@ So, to send an `HTTP PUT`, simply write:
 
 ```go
 payload := struct{Key string}{}
-data := struct{Data string}{}
-_, err := request.Send(&request.Options{
+res, err := request.Send(&request.Options{
     Method:  http.MethodPut,
     URL:     myURL,
     Payload: payload,
-}, &data)
-if err != nil {
-    return err
-}
+}, nil)
 ```
 
 To send an x-www-form, use a `map` in the payload:  
 
 ```go
-data := struct{Data string}{}
-_, err := request.Send(&request.Options{
+res, err := request.Send(&request.Options{
     Method:  http.MethodPut,
     URL:     myURL,
     Payload: map[string]string{
         "ID":   "1234",
         "Kind": "stuff,"
     },
-}, &data)
-if err != nil {
-    return err
-}
+}, nil)
 ```
 
 To send a multipart form with an attachment, use a `map`, an attachment, and one of the key must start with `>`:  
 
 ```go
-attachment := request.ContentWithData(myReadFile(), "image/png")
-data := struct{Data string}{}
-_, err := request.Send(&request.Options{
+attachment := io.Open("/path/to/file")
+res, err := request.Send(&request.Options{
     Method:  http.MethodPut,
     URL:     myURL,
     Payload: map[string]string{
@@ -134,36 +122,18 @@ _, err := request.Send(&request.Options{
         "Kind":  "stuff,"
         ">file": "image.png",
     },
-    Attachment: attachment.Reader(),
-}, &data)
-if err != nil {
-    return err
-}
+    Attachment: attachment,
+}, nil)
 ```
 To send the request again when receiving a Service Unavailable (`Attempts` and `Timeout` are optional):  
 ```go
-_, err := request.Send(&request.Options{
+res, err := request.Send(&request.Options{
     URL:                  myURL,
     RetryableStatusCodes: []int{http.StatusServiceUnavailable},
     Attempts:             10,
     Timeout:              2 * time.Second,
 }, nil)
-if err != nil {
-    return err
-}
 ```
-
-It is also possible to download data directly to an `io.Writer`, thus avoiding memory consumption:
-```go
-writer, err := os.Create(filepath.Join("tmp", "data"))
-defer writer.Close()
-reader, err := request.Send(&request.Options{
-	URL:    serverURL,
-	Writer: writer,
-}, nil)
-log.Infof("Downloaded %d bytes", reader.Length)
-```
-In that case, the `ContentReader`'s data is an empty byte array. Its other properties are valid (like the size, mime type, etc)
 
 **Notes:**  
 - if the PayloadType is not mentioned, it is calculated when processing the Payload.

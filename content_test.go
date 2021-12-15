@@ -3,7 +3,7 @@ package request_test
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"testing"
@@ -85,24 +85,13 @@ func TestCanCreateContentFromReader(t *testing.T) {
 	assert.Equal(t, int64(5), content.Length)
 }
 
-func TestCanCreateContentFromContentReader(t *testing.T) {
-	data := []byte{1, 2, 3, 4, 5}
-	content := request.ContentWithData(data)
-	require.NotNil(t, content, "Content should not be nil")
-	reader := content.Reader()
-	require.NotNil(t, reader, "ContentReader should not be nil")
-	another, err := reader.ReadContent()
-	require.Nil(t, err, "Failed to create Content, err=%+v", err)
-	require.Equal(t, another, content)
-}
-
 func TestShouldFailCreateContentFromBogusReader(t *testing.T) {
 	data := failingReader(0)
 	_, err := request.ContentFromReader(data)
 	require.NotNil(t, err, "Should fail create content")
 }
 
-func TestCanCreateContentReaderFromContent(t *testing.T) {
+func TestCanCreateReaderFromContent(t *testing.T) {
 	data := []byte{1, 2, 3, 4, 5}
 	content := request.ContentWithData(data)
 	require.NotNil(t, content, "Content should not be nil")
@@ -110,6 +99,18 @@ func TestCanCreateContentReaderFromContent(t *testing.T) {
 	assert.Equal(t, data[0], content.Data[0])
 	reader := content.Reader()
 	require.NotNil(t, reader, "ContentReader should not be nil")
+	require.Implements(t, (*io.Reader)(nil), reader)
+}
+
+func TestCanCreateReadCloserFromContent(t *testing.T) {
+	data := []byte{1, 2, 3, 4, 5}
+	content := request.ContentWithData(data)
+	require.NotNil(t, content, "Content should not be nil")
+	assert.Equal(t, int64(len(data)), content.Length)
+	assert.Equal(t, data[0], content.Data[0])
+	reader := content.ReadCloser()
+	require.NotNil(t, reader, "ContentReader should not be nil")
+	require.Implements(t, (*io.ReadCloser)(nil), reader)
 }
 
 func TestCanReadFromContentReader(t *testing.T) {
@@ -126,64 +127,27 @@ func TestCanReadFromContentReader(t *testing.T) {
 	assert.Equal(t, data[0], content.Data[0])
 }
 
-func TestContentReaderCanUnmarshallData(t *testing.T) {
+func TestContentCanUnmarshallData(t *testing.T) {
 	data := stuff{"12345"}
 	payload, _ := json.Marshal(data)
 	content := request.ContentWithData(payload)
 	require.NotNil(t, content, "Content should not be nil")
 
 	value := stuff{}
-	err := content.Reader().UnmarshalContentJSON(&value)
+	err := content.UnmarshalContentJSON(&value)
 	require.Nil(t, err, "Content failed unmarshaling, err=%+v", err)
 	assert.Equal(t, data.ID, value.ID)
 }
 
-func TestShouldFailUnmarshallContentReaderWithBogusReader(t *testing.T) {
-	reader := request.ContentReader{"application/json", 0, failingReader(0), http.Header{}, nil}
-	data := stuff{}
-	err := reader.UnmarshalContentJSON(&data)
-	require.NotNil(t, err, "Should fail unmarshal content")
-	assert.Contains(t, err.Error(), "Not Implemented")
-}
-
 func TestShouldFailUnmarshallContentReaderWithBogusData(t *testing.T) {
-	reader := request.ContentReader{"application/json", 0, ioutil.NopCloser(bytes.NewBufferString(`{"ID": 1234}`)), http.Header{}, nil}
+	content := request.ContentWithData([]byte(`{"ID": 1234}`), "application/json")
 	data := stuff{}
-	err := reader.UnmarshalContentJSON(&data)
+	err := content.UnmarshalContentJSON(&data)
 	require.NotNil(t, err, "Should fail unmarshal content")
 	assert.Truef(t, errors.Is(err, errors.JSONUnmarshalError), "Error should be a JSON Unmarshal Error")
 	var details errors.Error
 	require.True(t, errors.As(err, &details), "Error chain should contain an errors.Error")
 	assert.Equal(t, "error.json.unmarshal", details.ID, "Error's ID is wrong (%s)", details.ID)
-}
-
-func TestContentReaderShouldHaveSamePropertiesAsContent(t *testing.T) {
-	data := []byte{1, 2, 3, 4, 5}
-	content := request.ContentWithData(data)
-	require.NotNil(t, content, "Content should not be nil")
-	content.Type = "image/png"
-
-	reader := content.Reader()
-	require.NotNil(t, reader, "ContentReader should not be nil")
-	assert.Equal(t, content.Type, reader.Type, "ContentReader does not have the same type as the Content")
-	assert.Equal(t, content.Length, reader.Length, "ContentReader does not have the same length as the Content")
-}
-
-func TestContentShouldHaveSamePropertiesAsContentReader(t *testing.T) {
-	data := []byte{1, 2, 3, 4, 5}
-	content := request.ContentWithData(data)
-	require.NotNil(t, content, "Content should not be nil")
-	content.Type = "image/png"
-
-	reader := content.Reader()
-	require.NotNil(t, reader, "ContentReader should not be nil")
-	assert.Equal(t, content.Type, reader.Type, "ContentReader does not have the same type as the Content")
-	assert.Equal(t, content.Length, reader.Length, "ContentReader does not have the same length as the Content")
-
-	another, err := reader.ReadContent()
-	require.Nil(t, err, "Failed to create Content, err=%+v", err)
-	assert.Equal(t, reader.Type, another.Type, "Content does not have the same type as the ContentReader")
-	assert.Equal(t, reader.Length, another.Length, "Content does not have the same length as the ContentReader")
 }
 
 func TestContentShouldLogBinaryContent(t *testing.T) {

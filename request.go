@@ -36,12 +36,12 @@ type Options struct {
 	Accept               string
 	PayloadType          string // if not provided, it is computed. payload==struct => json, payload==map => form
 	Payload              interface{}
-	Attachment           *ContentReader // binary data that should be attached to the paylod (e.g.: multipart forms)
+	AttachmentType       string
+	Attachment           io.Reader // binary data that should be attached to the paylod (e.g.: multipart forms)
 	Authorization        string
 	RequestID            string
 	UserAgent            string
 	RetryableStatusCodes []int
-	Writer               io.Writer
 	Attempts             int
 	InterAttemptDelay    time.Duration
 	Timeout              time.Duration
@@ -66,7 +66,7 @@ const DefaultRequestBodyLogSize = 2048
 const DefaultResponseBodyLogSize = 2048
 
 // Send sends an HTTP request
-func Send(options *Options, results interface{}) (*ContentReader, error) {
+func Send(options *Options, results interface{}) (*Content, error) {
 	var err error
 
 	if err = normalizeOptions(options, results); err != nil {
@@ -88,7 +88,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 		log = log.Record("method", options.Method)
 		log.Tracef("Computed HTTP method: %s", options.Method)
 	}
-	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reqContent.Reader)
+	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reqContent.Reader())
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -158,7 +158,7 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 							req.Body.Close()
 						}
 						reqContent, _ := buildRequestContent(log, options)
-						req.Body = reqContent.Reader
+						req.Body = reqContent.ReadCloser()
 						continue
 					}
 					break
@@ -188,56 +188,59 @@ func Send(options *Options, results interface{}) (*ContentReader, error) {
 			if err != nil {
 				return nil, errors.FromHTTPStatusCode(res.StatusCode)
 			}
-			return resContent.Reader(), errors.FromHTTPStatusCode(res.StatusCode)
+			return resContent, errors.FromHTTPStatusCode(res.StatusCode)
 		}
 
-		// Reading the response body
-		var resContent *Content
+		// Analyze the response content type
+		resContentType := res.Header.Get("Content-Type")
 
-		if options.Writer != nil {
-			bytesRead, err := io.Copy(options.Writer, res.Body)
+		// some servers give the wrong mime type for JPEG files
+		if resContentType == "image/jpg" {
+			resContentType = "image/jpeg"
+		}
+		if len(resContentType) == 0 || resContentType == "application/octet-stream" {
+			if len(options.Accept) > 0 && options.Accept != "*" {
+				// TODO: well... Accept is not always a simple mime type...
+				resContentType = options.Accept
+			} else {
+				if mimetype := mime.TypeByExtension(filepath.Ext(options.URL.Path)); len(mimetype) > 0 {
+					resContentType = mimetype
+				}
+			}
+		}
+		log.Tracef("Computed Response Content-Type: %s", resContentType)
+
+		// Reading the response body
+
+		if writer, ok := results.(io.Writer); ok {
+			bytesRead, err := io.Copy(writer, res.Body)
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
 			log.Tracef("Read %d bytes", bytesRead)
-			resContent = ContentWithData([]byte{}, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies())
-		} else {
-			resContent, err = ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies())
+			resContent := ContentWithData([]byte{}, resContentType, bytesRead, res.Header, res.Cookies())
+			return resContent, nil
+		} else if results != nil { // Unmarshaling the response body if requested (structs, arrays, maps, etc)
+			resContent, err := ContentFromReader(res.Body, resContentType, res.Header, res.Cookies())
 			if err != nil {
-				log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
-				return nil, err                                           // err is already "decorated" by ContentReader
+				return nil, errors.WithStack(err)
 			}
+			err = json.Unmarshal(resContent.Data, results)
+			if err != nil {
+				log.Debugf("Failed to unmarshal response body, use the Content, JSON Error: %s", err)
+			}
+			return resContent, nil
 		}
 
-		// some servers give the wrong mime type for JPEG files
-		if resContent.Type == "image/jpg" {
-			resContent.Type = "image/jpeg"
-		}
-		if len(resContent.Type) == 0 || resContent.Type == "application/octet-stream" {
-			if len(options.Accept) > 0 && options.Accept != "*" {
-				// TODO: well... Accept is not always a simple mime type...
-				resContent.Type = options.Accept
-			}
-			if resContent.Type == "application/octet-stream" {
-				_ = mime.AddExtensionType(".mp3", "audio/mpeg3")
-				_ = mime.AddExtensionType(".m4a", "audio/x-m4a")
-				_ = mime.AddExtensionType(".wav", "audio/wav")
-				_ = mime.AddExtensionType(".jpeg", "image/jpg")
-				if restype := mime.TypeByExtension(filepath.Ext(options.URL.Path)); len(restype) > 0 {
-					resContent.Type = restype
-				}
-			}
+		// Reading all the response body into the Content
+		resContent, err := ContentFromReader(res.Body, resContentType, core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies())
+		if err != nil {
+			log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
+			return nil, err                                           // err is already "decorated" by ContentReader
 		}
 		log.Tracef("Response body: %s", resContent.LogString(uint64(options.ResponseBodyLogSize)))
 
-		// Unmarshaling the response content if requested
-		if results != nil {
-			err = json.Unmarshal(resContent.Data, results)
-			if err != nil {
-				log.Warnf("Failed to decode response, use the ContentReader, JSON Error: %v", err)
-			}
-		}
-		return resContent.Reader(), nil
+		return resContent, nil
 	}
 	// If we get here, there is an error
 	return nil, errors.Wrapf(errors.HTTPStatusRequestTimeout, "Giving up after %d attempts", options.Attempts)
@@ -276,7 +279,7 @@ func normalizeOptions(options *Options, results interface{}) (err error) {
 		options.UserAgent = "Request " + VERSION
 	}
 	if len(options.Accept) == 0 {
-		if results != nil {
+		if _, ok := results.(io.Writer); !ok && results != nil {
 			options.Accept = "application/json"
 		} else {
 			options.Accept = "*"
@@ -302,54 +305,43 @@ func normalizeOptions(options *Options, results interface{}) (err error) {
 }
 
 // buildRequestContent builds a Content for the request
-func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, error) {
+func buildRequestContent(log *logger.Logger, options *Options) (content *Content, err error) {
 	// Analyze payload
 	if options.Payload == nil {
 		if options.Attachment == nil {
-			return &ContentReader{}, nil
+			return &Content{}, nil
 		}
 		// We have an attachment, so the user meant it to be the payload
 		options.Payload = options.Attachment
+		if len(options.AttachmentType) > 0 {
+			options.PayloadType = options.AttachmentType
+		}
 	}
 
 	payloadType := reflect.TypeOf(options.Payload)
-	if contentReader, ok := options.Payload.(ContentReader); ok {
-		// Here we ignore options.PayloadType as the ContentReader embeds its ContentType
-		log.Tracef("Payload is a ContentReader (Type: %s, size: %d)", contentReader.Type, contentReader.Length)
-		if len(contentReader.Type) == 0 {
-			contentReader.Type = "application/octet-stream"
-		}
-		if contentReader.Length == 0 {
-			// Let's try to get a length from the reader
-			content, err := ContentFromReader(contentReader, contentReader.Type)
-			if err != nil {
-				return nil, err
+	if _content, ok := options.Payload.(Content); ok {
+		log.Tracef("Payload is a Content (Type: %s, size: %d)", _content.Type, _content.Length)
+		if len(_content.Type) == 0 {
+			if len(options.PayloadType) > 0 {
+				_content.Type = options.PayloadType
+			} else {
+				_content.Type = "application/octet-stream"
 			}
-			return content.Reader(), nil
 		}
-		return &contentReader, nil
-	} else if contentReader, ok := options.Payload.(*ContentReader); ok {
-		log.Tracef("Payload is a *ContentReader (Type: %s, size: %d)", contentReader.Type, contentReader.Length)
-		if len(contentReader.Type) == 0 {
-			contentReader.Type = "application/octet-stream"
-		}
-		if contentReader.Length == 0 {
-			// Let's try to get a length from the reader
-			content, err := ContentFromReader(contentReader, contentReader.Type)
-			if err != nil {
-				return nil, err
+		content = &_content
+	} else if _content, ok := options.Payload.(*Content); ok {
+		log.Tracef("Payload is a *Content (Type: %s, size: %d)", _content.Type, _content.Length)
+		if len(_content.Type) == 0 {
+			if len(options.PayloadType) > 0 {
+				_content.Type = options.PayloadType
+			} else {
+				_content.Type = "application/octet-stream"
 			}
-			return content.Reader(), nil
 		}
-		return contentReader, nil
-	} else if content, ok := options.Payload.(Content); ok {
-		// Here we ignore options.PayloadType as the Content embeds its ContentType
-		log.Tracef("Payload is a Content (Type: %s, size: %d)", content.Type, content.Length)
-		return content.Reader(), nil
-	} else if content, ok := options.Payload.(*Content); ok {
-		// Here we ignore options.PayloadType as the Content embeds its ContentType
-		log.Tracef("Payload is a *Content (Type: %s, size: %d)", content.Type, content.Length)
-		return content.Reader(), nil
+		content = _content
+	} else if reader, ok := options.Payload.(io.Reader); ok {
+		log.Tracef("Payload is a Reader (Data Type: %s)", options.PayloadType)
+		content, _ = ContentFromReader(reader, options.PayloadType, 0, nil, nil)
 	} else if payloadType.Kind() == reflect.Struct || (payloadType.Kind() == reflect.Ptr && reflect.Indirect(reflect.ValueOf(options.Payload)).Kind() == reflect.Struct) { // JSONify the payload
 		log.Tracef("Payload is a Struct, JSONifying it")
 		// TODO: Add other payload types like XML, etc
@@ -363,12 +355,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 			}
 			return nil, errors.JSONMarshalError.Wrap(err)
 		}
-		if options.RequestBodyLogSize > 0 {
-			log.Tracef("Request body %d bytes: \n%s", len(payload), string(payload[:int(math.Min(float64(options.RequestBodyLogSize), float64(len(payload))))]))
-		} else {
-			log.Tracef("Request body %d bytes", len(payload))
-		}
-		return ContentWithData(payload, options.PayloadType).Reader(), nil
+		content = ContentWithData(payload, options.PayloadType)
 	} else if payloadType.Kind() == reflect.Array || payloadType.Kind() == reflect.Slice {
 		log.Tracef("Payload is an array or a slice, JSONifying it")
 		// TODO: Add other payload types like XML, etc
@@ -382,12 +369,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 			}
 			return nil, errors.JSONMarshalError.Wrap(err)
 		}
-		if options.RequestBodyLogSize > 0 {
-			log.Tracef("Request body %d bytes: \n%s", len(payload), string(payload[:int(math.Min(float64(options.RequestBodyLogSize), float64(len(payload))))]))
-		} else {
-			log.Tracef("Request body %d bytes", len(payload))
-		}
-		return ContentWithData(payload, options.PayloadType).Reader(), nil
+		content = ContentWithData(payload, options.PayloadType)
 	} else if payloadType.Kind() == reflect.Map {
 		// Collect the attributes from the map
 		attributes := map[string]string{}
@@ -415,7 +397,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 			for key, value := range attributes {
 				form.Set(key, value)
 			}
-			return ContentWithData([]byte(form.Encode()), options.PayloadType).Reader(), nil
+			return ContentWithData([]byte(form.Encode()), options.PayloadType), nil
 		}
 
 		log.Tracef("Building a multipart data form with 1 attachment")
@@ -430,13 +412,10 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 				if len(value) == 0 {
 					return nil, errors.Errorf("Empty value for multipart form field %s", key)
 				}
-				if options.Attachment.Length == 0 {
-					return nil, errors.Errorf("Missing/Empty Attachment for multipart form field %s", key)
-				}
 				partHeader := textproto.MIMEHeader{}
 				partHeader.Add("Content-Disposition", fmt.Sprintf("form-data; name=\"%s\"; filename=\"%s\"", key, value))
-				if len(options.Attachment.Type) > 0 {
-					partHeader.Add("Content-Type", options.Attachment.Type)
+				if len(options.AttachmentType) > 0 {
+					partHeader.Add("Content-Type", options.AttachmentType)
 				}
 				part, err := writer.CreatePart(partHeader)
 				if err != nil {
@@ -445,6 +424,9 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 				written, err := io.Copy(part, options.Attachment)
 				if err != nil {
 					return nil, errors.Errorf("Failed to write attachment to multipart form field %s", key)
+				}
+				if written == 0 {
+					return nil, errors.Errorf("Missing/Empty Attachment for multipart form field %s", key)
 				}
 				log.Tracef("Wrote %d bytes to multipart form field %s", written, key)
 			} else {
@@ -457,8 +439,15 @@ func buildRequestContent(log *logger.Logger, options *Options) (*ContentReader, 
 		if err := writer.Close(); err != nil {
 			return nil, errors.Wrap(err, "Failed to create multipart data")
 		}
-		content, _ := ContentFromReader(body, writer.FormDataContentType())
-		return content.Reader(), nil
+		content, _ = ContentFromReader(body, writer.FormDataContentType())
+	}
+	if content != nil {
+		if options.RequestBodyLogSize > 0 {
+			log.Tracef("Request body %d bytes: \n%s", content.Length, string(content.Data[:int(math.Min(float64(options.RequestBodyLogSize), float64(content.Length)))]))
+		} else {
+			log.Tracef("Request body %d bytes", content.Length)
+		}
+		return content, nil
 	}
 	return nil, errors.Errorf("Unsupported Payload: %s", payloadType.Kind().String())
 }
