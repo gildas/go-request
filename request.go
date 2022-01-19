@@ -156,9 +156,6 @@ func Send(options *Options, results interface{}) (*Content, error) {
 						log.Warnf("Temporary failed to send request (duration: %s/%s), Error: %s", duration, options.Timeout, err.Error()) // we don't want the stack here
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 						time.Sleep(options.InterAttemptDelay)
-						if req.Body != nil {
-							req.Body.Close()
-						}
 						reqContent, _ := buildRequestContent(log, options)
 						req.Body = reqContent.ReadCloser()
 						continue
@@ -182,6 +179,8 @@ func Send(options *Options, results interface{}) (*Content, error) {
 					log.Warnf("Retryable Response Status: %s", res.Status)
 					log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 					time.Sleep(options.InterAttemptDelay)
+					reqContent, _ := buildRequestContent(log, options)
+					req.Body = reqContent.ReadCloser()
 					continue
 				}
 			}
