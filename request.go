@@ -87,6 +87,8 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		}
 		log = log.Record("method", options.Method)
 		log.Tracef("Computed HTTP method: %s", options.Method)
+	} else {
+		log = log.Record("method", options.Method)
 	}
 	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reqContent.Reader())
 	if err != nil {
@@ -225,6 +227,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
+			log.Tracef("Response body: %s", resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			err = json.Unmarshal(resContent.Data, results)
 			if err != nil {
 				log.Debugf("Failed to unmarshal response body, use the Content, JSON Error: %s", err)
