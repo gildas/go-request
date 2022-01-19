@@ -87,6 +87,8 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		}
 		log = log.Record("method", options.Method)
 		log.Tracef("Computed HTTP method: %s", options.Method)
+	} else {
+		log = log.Record("method", options.Method)
 	}
 	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reqContent.Reader())
 	if err != nil {
@@ -154,9 +156,6 @@ func Send(options *Options, results interface{}) (*Content, error) {
 						log.Warnf("Temporary failed to send request (duration: %s/%s), Error: %s", duration, options.Timeout, err.Error()) // we don't want the stack here
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 						time.Sleep(options.InterAttemptDelay)
-						if req.Body != nil {
-							req.Body.Close()
-						}
 						reqContent, _ := buildRequestContent(log, options)
 						req.Body = reqContent.ReadCloser()
 						continue
@@ -180,6 +179,8 @@ func Send(options *Options, results interface{}) (*Content, error) {
 					log.Warnf("Retryable Response Status: %s", res.Status)
 					log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 					time.Sleep(options.InterAttemptDelay)
+					reqContent, _ := buildRequestContent(log, options)
+					req.Body = reqContent.ReadCloser()
 					continue
 				}
 			}
@@ -225,6 +226,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
+			log.Tracef("Response body: %s", resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			err = json.Unmarshal(resContent.Data, results)
 			if err != nil {
 				log.Debugf("Failed to unmarshal response body, use the Content, JSON Error: %s", err)
