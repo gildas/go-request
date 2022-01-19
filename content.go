@@ -64,7 +64,7 @@ func ContentFromReader(reader io.Reader, options ...interface{}) (*Content, erro
 
 // Reader gets an io.Reader from this Content
 func (content *Content) Reader() io.Reader {
-	return ioutil.NopCloser(bytes.NewReader(content.Data))
+	return bytes.NewReader(content.Data)
 }
 
 // ReadCloser gets an io.ReadCloser from this Content
