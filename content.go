@@ -69,7 +69,7 @@ func (content *Content) Reader() io.Reader {
 
 // ReadCloser gets an io.ReadCloser from this Content
 func (content *Content) ReadCloser() io.ReadCloser {
-	return ioutil.NopCloser(bytes.NewReader(content.Data))
+	return io.NopCloser(bytes.NewReader(content.Data))
 }
 
 // UnmarshalContentJSON reads the content of an I/O reader and unmarshals it into JSON
