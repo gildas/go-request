@@ -2,10 +2,10 @@ package request
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/hex"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"math"
 	"net/http"
 	"net/url"
@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/gildas/go-errors"
+	"github.com/gildas/go-logger"
 )
 
 // Content defines some content
@@ -27,21 +28,41 @@ type Content struct {
 
 // ContentWithData instantiates a Content from a simple byte array
 func ContentWithData(data []byte, options ...interface{}) *Content {
+	log := logger.Create("REQUEST", &logger.NilStream{})
 	content := &Content{}
 	content.Data = data
-	for _, option := range options {
-		if u, ok := option.(*url.URL); ok {
-			content.URL = u
-		} else if t, ok := option.(string); ok {
-			content.Type = t
-		} else if l, ok := option.(int64); ok && l > 0 {
-			content.Length = l
-		} else if l, ok := option.(int); ok && l > 0 {
-			content.Length = int64(l)
-		} else if h, ok := option.(http.Header); ok {
-			content.Headers = h
-		} else if c, ok := option.([]*http.Cookie); ok {
-			content.Cookies = c
+	for _, raw := range options {
+		switch option := raw.(type) {
+		case *url.URL:
+			content.URL = option
+		case *logger.Logger:
+			log = option
+		case int64:
+			content.Length = option
+		case int:
+			content.Length = int64(option)
+		case string:
+			content.Type = option
+		case http.Header:
+			content.Headers = option
+		case []*http.Cookie:
+			content.Cookies = option
+		}
+	}
+	if content.Headers.Get("Content-Encoding") == "gzip" {
+		log.Tracef("Content is gzipped (%d bytes)", len(content.Data))
+		buffer := bytes.NewBuffer(content.Data)
+		if reader, err := gzip.NewReader(buffer); err == nil {
+			if uncompressed, err := io.ReadAll(reader); err == nil {
+				content.Data = uncompressed
+				content.Length = int64(len(uncompressed))
+				log.Tracef("Uncompressed data (%d bytes)", content.Length)
+			} else {
+				log.Errorf("Failed to uncompress data", err)
+			}
+			reader.Close()
+		} else {
+			log.Errorf("Failed to create a GZIP reader", err)
 		}
 	}
 	if content.Length == 0 {
@@ -55,7 +76,7 @@ func ContentWithData(data []byte, options ...interface{}) *Content {
 
 // ContentFromReader instantiates a Content from an I/O reader
 func ContentFromReader(reader io.Reader, options ...interface{}) (*Content, error) {
-	data, err := ioutil.ReadAll(reader)
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -90,7 +111,9 @@ func (content Content) LogString(maxSize uint64) string {
 		if len(content.Data) > 0 {
 			sb.WriteString(": ")
 			switch {
-			case content.Type == "application/json":
+			case strings.HasPrefix(content.Type, "application/json"):
+				fallthrough
+			case strings.HasPrefix(content.Type, "application/xml"):
 				fallthrough
 			case strings.HasPrefix(content.Type, "text/"):
 				sb.WriteString(string(content.Data[:int(math.Min(float64(maxSize), float64(content.Length)))]))

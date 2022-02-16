@@ -169,7 +169,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			return nil, err
 		}
 		defer res.Body.Close()
-		log.Tracef("Response %s in %s", res.Status, duration)
+		log.Debugf("Response %s in %s", res.Status, duration)
 		log.Tracef("Response Headers: %#v", res.Header)
 
 		// Processing the status
@@ -185,10 +185,11 @@ func Send(options *Options, results interface{}) (*Content, error) {
 				}
 			}
 			// Read the body to get the error message
-			resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies())
+			resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies(), log)
 			if err != nil {
 				return nil, errors.FromHTTPStatusCode(res.StatusCode)
 			}
+			log.Tracef("Response body: %s", resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			return resContent, errors.FromHTTPStatusCode(res.StatusCode)
 		}
 
@@ -222,7 +223,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			resContent := ContentWithData([]byte{}, resContentType, bytesRead, res.Header, res.Cookies())
 			return resContent, nil
 		} else if results != nil { // Unmarshaling the response body if requested (structs, arrays, maps, etc)
-			resContent, err := ContentFromReader(res.Body, resContentType, res.Header, res.Cookies())
+			resContent, err := ContentFromReader(res.Body, resContentType, res.Header, res.Cookies(), log)
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
@@ -235,7 +236,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		}
 
 		// Reading all the response body into the Content
-		resContent, err := ContentFromReader(res.Body, resContentType, core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies())
+		resContent, err := ContentFromReader(res.Body, resContentType, core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies(), log)
 		if err != nil {
 			log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
 			return nil, err                                           // err is already "decorated" by ContentReader
