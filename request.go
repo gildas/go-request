@@ -169,7 +169,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			return nil, err
 		}
 		defer res.Body.Close()
-		log.Tracef("Response %s in %s", res.Status, duration)
+		log.Debugf("Response %s in %s", res.Status, duration)
 		log.Tracef("Response Headers: %#v", res.Header)
 
 		// Processing the status
@@ -189,6 +189,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			if err != nil {
 				return nil, errors.FromHTTPStatusCode(res.StatusCode)
 			}
+			log.Tracef("Response body: %s", resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			return resContent, errors.FromHTTPStatusCode(res.StatusCode)
 		}
 
