@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"math"
 	"net/http"
 	"net/url"
@@ -55,7 +54,7 @@ func ContentWithData(data []byte, options ...interface{}) *Content {
 
 // ContentFromReader instantiates a Content from an I/O reader
 func ContentFromReader(reader io.Reader, options ...interface{}) (*Content, error) {
-	data, err := ioutil.ReadAll(reader)
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
