@@ -94,7 +94,9 @@ func (content Content) LogString(maxSize uint64) string {
 		if len(content.Data) > 0 {
 			sb.WriteString(": ")
 			switch {
-			case content.Type == "application/json":
+			case strings.HasPrefix(content.Type, "application/json"):
+				fallthrough
+			case strings.HasPrefix(content.Type, "application/xml"):
 				fallthrough
 			case strings.HasPrefix(content.Type, "text/"):
 				sb.WriteString(string(content.Data[:int(math.Min(float64(maxSize), float64(content.Length)))]))
