@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/gildas/go-errors"
+	"github.com/gildas/go-logger"
 )
 
 // Content defines some content
@@ -26,21 +27,25 @@ type Content struct {
 
 // ContentWithData instantiates a Content from a simple byte array
 func ContentWithData(data []byte, options ...interface{}) *Content {
+	log := logger.Create("REQUEST", &logger.NilStream{})
 	content := &Content{}
 	content.Data = data
-	for _, option := range options {
-		if u, ok := option.(*url.URL); ok {
-			content.URL = u
-		} else if t, ok := option.(string); ok {
-			content.Type = t
-		} else if l, ok := option.(int64); ok && l > 0 {
-			content.Length = l
-		} else if l, ok := option.(int); ok && l > 0 {
-			content.Length = int64(l)
-		} else if h, ok := option.(http.Header); ok {
-			content.Headers = h
-		} else if c, ok := option.([]*http.Cookie); ok {
-			content.Cookies = c
+	for _, raw := range options {
+		switch option := raw.(type) {
+		case *url.URL:
+			content.URL = option
+		case *logger.Logger:
+			log = option
+		case int64:
+			content.Length = option
+		case int:
+			content.Length = int64(option)
+		case string:
+			content.Type = option
+		case http.Header:
+			content.Headers = option
+		case []*http.Cookie:
+			content.Cookies = option
 		}
 	}
 	if content.Length == 0 {
