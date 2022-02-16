@@ -2,6 +2,7 @@ package request
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -46,6 +47,22 @@ func ContentWithData(data []byte, options ...interface{}) *Content {
 			content.Headers = option
 		case []*http.Cookie:
 			content.Cookies = option
+		}
+	}
+	if content.Headers.Get("Content-Encoding") == "gzip" {
+		log.Tracef("Content is gzipped (%d bytes)", len(content.Data))
+		buffer := bytes.NewBuffer(content.Data)
+		if reader, err := gzip.NewReader(buffer); err == nil {
+			if uncompressed, err := io.ReadAll(reader); err == nil {
+				content.Data = uncompressed
+				content.Length = int64(len(uncompressed))
+				log.Tracef("Uncompressed data (%d bytes)", content.Length)
+			} else {
+				log.Errorf("Failed to uncompress data", err)
+			}
+			reader.Close()
+		} else {
+			log.Errorf("Failed to create a GZIP reader", err)
 		}
 	}
 	if content.Length == 0 {
