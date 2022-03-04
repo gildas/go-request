@@ -113,7 +113,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		req.Header.Set("Content-Type", reqContent.Type)
 	}
 	if reqContent.Length > 0 {
-		req.Header.Set("Content-Length", strconv.FormatInt(reqContent.Length, 10))
+		req.Header.Set("Content-Length", strconv.FormatUint(reqContent.Length, 10))
 	}
 	for key, value := range options.Headers {
 		req.Header.Set(key, value)

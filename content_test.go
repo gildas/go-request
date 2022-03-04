@@ -77,7 +77,7 @@ func (suite *ContentSuite) TestCanCreateWithURL() {
 	url, _ := url.Parse("https://www.acme.com")
 	content := request.ContentWithData(data, url)
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal(int64(len(data)), content.Length)
+	suite.Assert().Equal(uint64(len(data)), content.Length)
 	suite.Assert().Equal(data[0], content.Data[0])
 	suite.Assert().Equal(url, content.URL)
 }
@@ -87,7 +87,7 @@ func (suite *ContentSuite) TestCanCreateWithType() {
 	mime := "image/png"
 	content := request.ContentWithData(data, mime)
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal(int64(len(data)), content.Length)
+	suite.Assert().Equal(uint64(len(data)), content.Length)
 	suite.Assert().Equal(data[0], content.Data[0])
 	suite.Assert().Equal(mime, content.Type)
 }
@@ -96,15 +96,31 @@ func (suite *ContentSuite) TestCanCreateWithLength() {
 	data := []byte{1, 2, 3, 4, 5}
 	content := request.ContentWithData(data, len(data))
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal(int64(len(data)), content.Length)
+	suite.Assert().Equal(uint64(len(data)), content.Length)
 	suite.Assert().Equal(data[0], content.Data[0])
 }
 
-func (suite *ContentSuite) TestCanCreateWithLength64() {
+func (suite *ContentSuite) TestCanCreateWithUintLength() {
+	data := []byte{1, 2, 3, 4, 5}
+	content := request.ContentWithData(data, uint(len(data)))
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal(uint64(len(data)), content.Length)
+	suite.Assert().Equal(data[0], content.Data[0])
+}
+
+func (suite *ContentSuite) TestCanCreateWithInt64Length() {
 	data := []byte{1, 2, 3, 4, 5}
 	content := request.ContentWithData(data, int64(len(data)))
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal(int64(len(data)), content.Length)
+	suite.Assert().Equal(uint64(len(data)), content.Length)
+	suite.Assert().Equal(data[0], content.Data[0])
+}
+
+func (suite *ContentSuite) TestCanCreateWithUint64Length() {
+	data := []byte{1, 2, 3, 4, 5}
+	content := request.ContentWithData(data, uint64(len(data)))
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal(uint64(len(data)), content.Length)
 	suite.Assert().Equal(data[0], content.Data[0])
 }
 
@@ -114,7 +130,7 @@ func (suite *ContentSuite) TestCanCreateWithCookies() {
 	cookies := []*http.Cookie{{Name: "Test", Value: "1234", Secure: true, HttpOnly: true}}
 	content := request.ContentWithData(data, url, cookies)
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal(int64(len(data)), content.Length)
+	suite.Assert().Equal(uint64(len(data)), content.Length)
 	suite.Assert().Equal(data[0], content.Data[0])
 	suite.Assert().Equal(url, content.URL)
 	suite.Assert().Equal(1, len(content.Cookies))
@@ -128,7 +144,7 @@ func (suite *ContentSuite) TestCanCreateWithHeaders() {
 	header.Set("Custom-Header", "custom-value")
 	content := request.ContentWithData(data, url, header)
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal(int64(len(data)), content.Length)
+	suite.Assert().Equal(uint64(len(data)), content.Length)
 	suite.Assert().Equal(data[0], content.Data[0])
 	suite.Assert().Equal(url, content.URL)
 	suite.Require().NotNil(content.Headers)
@@ -140,7 +156,7 @@ func (suite *ContentSuite) TestCanCreateFromReader() {
 	content, err := request.ContentFromReader(data)
 	suite.Require().NoErrorf(err, "Failed to create Content, err=%+v", err)
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal(int64(5), content.Length)
+	suite.Assert().Equal(uint64(5), content.Length)
 }
 
 func (suite *ContentSuite) TestShouldFailCreateFromBogusReader() {
@@ -153,7 +169,7 @@ func (suite *ContentSuite) TestCanCreateReaderFromContent() {
 	data := []byte{1, 2, 3, 4, 5}
 	content := request.ContentWithData(data)
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal(int64(len(data)), content.Length)
+	suite.Assert().Equal(uint64(len(data)), content.Length)
 	suite.Assert().Equal(data[0], content.Data[0])
 	reader := content.Reader()
 	suite.Require().NotNil(reader, "ContentReader should not be nil")
@@ -164,7 +180,7 @@ func (suite *ContentSuite) TestCanCreateReadCloserFromContent() {
 	data := []byte{1, 2, 3, 4, 5}
 	content := request.ContentWithData(data)
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal(int64(len(data)), content.Length)
+	suite.Assert().Equal(uint64(len(data)), content.Length)
 	suite.Assert().Equal(data[0], content.Data[0])
 	reader := content.ReadCloser()
 	suite.Require().NotNil(reader, "ContentReader should not be nil")
@@ -298,4 +314,85 @@ func (suite *ContentSuite) TestCanCreateFromBogusCompressedDataHeader() {
 	suite.Require().NotNil(content, "Content should not be nil")
 	suite.Assert().Equal("application/json", content.Type)
 	suite.Assert().Equalf(len(data), int(content.Length), "Content length should be %d", len(data))
+}
+
+func (suite *ContentSuite) TestCanMarshal() {
+	data := []byte{1, 2, 3, 4, 5}
+	url, _ := url.Parse("https://www.acme.com")
+	header := http.Header{}
+	header.Set("Custom-Header", "custom-value")
+	cookie := http.Cookie{
+		Name:    "name",
+		Value:   "value",
+		Path:    "/",
+		Expires: time.Date(2022, 3, 4, 10, 12, 30, 0, time.UTC),
+	}
+	content := request.ContentWithData(data, url, header, "image/png", []*http.Cookie{&cookie})
+	suite.Require().NotNil(content, "Content should not be nil")
+
+	expected := `
+	{
+		"Type":    "image/png",
+		"url":     "https://www.acme.com",
+		"Length":  5,
+		"headers": {"Custom-Header":["custom-value"]},
+		"cookies": [{
+			"name":  "name",
+			"value": "value",
+			"path":  "/",
+			"expires": "2022-03-04T10:12:30Z"
+		}],
+		"Data":    "AQIDBAU="
+	}`
+	payload, err := json.Marshal(content)
+	suite.Require().NoErrorf(err, "Failed to marshal content, error: %s", err)
+	suite.JSONEq(expected, string(payload))
+}
+
+func (suite *ContentSuite) TestCanUmMarshal() {
+	payload := `
+	{
+		"Type":    "image/png",
+		"url":     "https://www.acme.com",
+		"Length":  5,
+		"headers": {"Custom-Header":["custom-value"]},
+		"cookies": [{
+			"name":  "name",
+			"value": "value",
+			"path":  "/",
+			"expires": "2022-03-04T10:12:30Z"
+		}],
+		"Data":    "AQIDBAU="
+	}`
+
+	content := request.Content{}
+	err := json.Unmarshal([]byte(payload), &content)
+	suite.Require().NoErrorf(err, "Failed to unmarshal content, error: %s", err)
+	suite.Assert().Equal("image/png", content.Type)
+	suite.Require().NotNil(content.URL)
+	suite.Assert().Equal("https://www.acme.com", content.URL.String())
+	suite.Assert().Equal("custom-value", content.Headers.Get("Custom-Header"))
+	suite.Require().Len(content.Cookies, 1, "There should be 1 cookie")
+	suite.Require().NotNil(content.Cookies[0])
+	suite.Assert().Equal("name", content.Cookies[0].Name)
+	suite.Assert().Equal("value", content.Cookies[0].Value)
+	suite.Assert().Equal("/", content.Cookies[0].Path)
+	suite.Assert().Equal(time.Date(2022, 3, 4, 10, 12, 30, 0, time.UTC), content.Cookies[0].Expires)
+	suite.Assert().False(content.Cookies[0].Secure)
+	suite.Assert().Equal(uint64(5), content.Length)
+	suite.Assert().Equal([]byte{1, 2, 3, 4, 5}, content.Data)
+}
+
+func (suite *ContentSuite) TestShouldFailUnmarshallWithBogusData() {
+	payload := `
+	{
+		"Type":    1,
+		"Length":  5,
+		"Data":    "AQIDBAU="
+	}`
+
+	content := request.Content{}
+	err := json.Unmarshal([]byte(payload), &content)
+	suite.Require().Error(err)
+	suite.Assert().ErrorIs(err, errors.JSONUnmarshalError, "Error should be a JSON Unmarshal Error")
 }
