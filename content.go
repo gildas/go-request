@@ -12,18 +12,20 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gildas/go-core"
 	"github.com/gildas/go-errors"
 	"github.com/gildas/go-logger"
 )
 
 // Content defines some content
 type Content struct {
-	Type    string         `json:"contentType"`
-	URL     *url.URL       `json:"contentUrl"`
-	Length  int64          `json:"contentLength"`
-	Data    []byte         `json:"contentData"`
-	Headers http.Header    `json:"contentHeaders"`
-	Cookies []*http.Cookie `json:"cookies"`
+	Type    string         `json:"Type"`
+	Name    string         `json:"Name,omitempty"`
+	URL     *url.URL       `json:"-"`
+	Length  uint64         `json:"Length"`
+	Data    []byte         `json:"Data"`
+	Headers http.Header    `json:"headers,omitempty"`
+	Cookies []*http.Cookie `json:"-"`
 }
 
 // ContentWithData instantiates a Content from a simple byte array
@@ -38,9 +40,13 @@ func ContentWithData(data []byte, options ...interface{}) *Content {
 		case *logger.Logger:
 			log = option
 		case int64:
+			content.Length = uint64(option)
+		case uint64:
 			content.Length = option
+		case uint:
+			content.Length = uint64(option)
 		case int:
-			content.Length = int64(option)
+			content.Length = uint64(option)
 		case string:
 			content.Type = option
 		case http.Header:
@@ -55,7 +61,7 @@ func ContentWithData(data []byte, options ...interface{}) *Content {
 		if reader, err := gzip.NewReader(buffer); err == nil {
 			if uncompressed, err := io.ReadAll(reader); err == nil {
 				content.Data = uncompressed
-				content.Length = int64(len(uncompressed))
+				content.Length = uint64(len(uncompressed))
 				log.Tracef("Uncompressed data (%d bytes)", content.Length)
 			} else {
 				log.Errorf("Failed to uncompress data", err)
@@ -66,7 +72,7 @@ func ContentWithData(data []byte, options ...interface{}) *Content {
 		}
 	}
 	if content.Length == 0 {
-		content.Length = int64(len(content.Data))
+		content.Length = uint64(len(content.Data))
 	}
 	if content.Headers == nil {
 		content.Headers = http.Header{}
@@ -93,7 +99,7 @@ func (content *Content) ReadCloser() io.ReadCloser {
 	return io.NopCloser(bytes.NewReader(content.Data))
 }
 
-// UnmarshalContentJSON reads the content of an I/O reader and unmarshals it into JSON
+// UnmarshalContentJSON unmarshals its Data into JSON
 func (content Content) UnmarshalContentJSON(v interface{}) (err error) {
 	if err = json.Unmarshal(content.Data, &v); err != nil {
 		return errors.JSONUnmarshalError.Wrap(err)
@@ -101,11 +107,12 @@ func (content Content) UnmarshalContentJSON(v interface{}) (err error) {
 	return nil
 }
 
+// LogString generates a string suitable for logging
 func (content Content) LogString(maxSize uint64) string {
 	sb := strings.Builder{}
 	sb.WriteString(content.Type)
 	sb.WriteString(", ")
-	sb.WriteString(strconv.FormatInt(content.Length, 10))
+	sb.WriteString(strconv.FormatUint(content.Length, 10))
 	sb.WriteString(" bytes")
 	if maxSize > 0 {
 		if len(content.Data) > 0 {
@@ -124,4 +131,49 @@ func (content Content) LogString(maxSize uint64) string {
 	}
 	sb.WriteString("")
 	return sb.String()
+}
+
+// MarshalJSON marshals the Content into JSON
+//
+// implements json.Marshaler
+func (content Content) MarshalJSON() ([]byte, error) {
+	type surrogate Content
+	cookies := make([]*cookie, len(content.Cookies))
+	for i, c := range content.Cookies {
+		cookies[i] = (*cookie)(c)
+	}
+	data, err := json.Marshal(struct {
+		surrogate
+		URL     *core.URL `json:"url,omitempty"`
+		Cookies []*cookie `json:"cookies,omitempty"`
+	}{
+		surrogate: surrogate(content),
+		URL:       (*core.URL)(content.URL),
+		Cookies:   cookies,
+	})
+	return data, errors.JSONMarshalError.Wrap(err)
+}
+
+// UnmarshalJSON unmarshals the Content from JSON
+//
+// implements json.Unmarshaler
+func (content *Content) UnmarshalJSON(payload []byte) error {
+	type surrogate Content
+	var inner struct {
+		surrogate
+		URL     *core.URL `json:"url,omitempty"`
+		Cookies []*cookie `json:"cookies,omitempty"`
+	}
+	if err := json.Unmarshal(payload, &inner); err != nil {
+		return errors.JSONUnmarshalError.Wrap(err)
+	}
+	*content = Content(inner.surrogate)
+	content.URL = (*url.URL)(inner.URL)
+	if len(inner.Cookies) > 0 {
+		content.Cookies = make([]*http.Cookie, len(inner.Cookies))
+		for i, c := range inner.Cookies {
+			content.Cookies[i] = (*http.Cookie)(c)
+		}
+	}
+	return nil
 }

@@ -919,7 +919,7 @@ func (suite *RequestSuite) TestCanSendRequestWithWriterStream() {
 	suite.Logger.Memoryf("After sending request")
 	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
 	suite.Assert().Equal("application/octet-stream", content.Type)
-	suite.Assert().Equal(int64(4), content.Length)
+	suite.Assert().Equal(uint64(4), content.Length)
 }
 
 // Suite Tools
