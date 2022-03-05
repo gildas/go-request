@@ -2,6 +2,8 @@ package request_test
 
 import (
 	"bytes"
+	"crypto/aes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -395,4 +397,90 @@ func (suite *ContentSuite) TestShouldFailUnmarshallWithBogusData() {
 	err := json.Unmarshal([]byte(payload), &content)
 	suite.Require().Error(err)
 	suite.Assert().ErrorIs(err, errors.JSONUnmarshalError, "Error should be a JSON Unmarshal Error")
+}
+
+func (suite *ContentSuite) TestCanDecryptWithAESCTR() {
+	encrypted := []byte{0xa9, 0x09, 0x20, 0xf8, 0x77, 0x58, 0x30, 0xee,  0x91, 0x22, 0x18, 0x5c, 0x1a, 0xfd, 0x2d, 0xf2}
+	decrypted := []byte{0x17, 0x07, 0x26, 0x56, 0xd4, 0x11, 0x16, 0x9d,  0x4d, 0xe5, 0x0a, 0xb9, 0x08, 0xd7, 0xb3, 0x3b }
+	key, _ := hex.DecodeString("FE400803E0BA6A4B3D611305C1A2EDE263A4D599C96F2BA49C837FD4E193C76D")
+	content := request.Content{
+		Type:   "image/jpeg",
+		Length: uint64(len(encrypted)),
+		Data:   encrypted,
+	}
+
+	suite.Assert().Equal("AESCTR", request.AESCTR.String())
+	decryptedContent, err := content.Decrypt(request.AESCTR, key)
+	suite.Require().NoError(err, "Failed to decrypt content")
+	suite.Require().Lenf(decryptedContent.Data, len(decrypted), "Decrypted content should be %d", len(decrypted))
+	suite.Require().Equal(decryptedContent.Length, uint64(len(decrypted)), "Decrypted content should be %d", len(decrypted))
+	suite.Assert().Equal(decrypted, decryptedContent.Data, "Decrypted content is incorrect")
+}
+
+func (suite *ContentSuite) TestCanEncryptWithAESCTR() {
+	encrypted := []byte{0xa9, 0x09, 0x20, 0xf8, 0x77, 0x58, 0x30, 0xee,  0x91, 0x22, 0x18, 0x5c, 0x1a, 0xfd, 0x2d, 0xf2}
+	decrypted := []byte{0x17, 0x07, 0x26, 0x56, 0xd4, 0x11, 0x16, 0x9d,  0x4d, 0xe5, 0x0a, 0xb9, 0x08, 0xd7, 0xb3, 0x3b }
+	key, _ := hex.DecodeString("FE400803E0BA6A4B3D611305C1A2EDE263A4D599C96F2BA49C837FD4E193C76D")
+	content := request.Content{
+		Type:   "image/jpeg",
+		Length: uint64(len(decrypted)),
+		Data:   decrypted,
+	}
+
+	suite.Assert().Equal("AESCTR", request.AESCTR.String())
+	encryptedContent, err := content.Encrypt(request.AESCTR, key)
+	suite.Require().NoError(err, "Failed to encrypt content")
+	suite.Require().Lenf(encryptedContent.Data, len(encrypted), "Encrypted content should be %d", len(encrypted))
+	suite.Require().Equal(encryptedContent.Length, uint64(len(encrypted)), "Encrypted content should be %d", len(encrypted))
+	suite.Assert().Equal(encrypted, encryptedContent.Data, "Encrypted content is incorrect")
+}
+
+func (suite *ContentSuite) TestShouldFailDecryptWithInvalidAlgorithm() {
+	_, err := request.Content{}.Decrypt(request.CryptoAlgorithm(10), []byte{})
+	suite.Require().Error(err)
+	suite.Logger.Errorf("Expected Error!", err)
+	suite.Assert().ErrorIs(err, errors.InvalidType, "Error should be an Invalid Type Error")
+	var details errors.Error
+	suite.Require().ErrorAs(err, &details)
+	suite.Assert().Equal("Unknown 10", details.What)
+}
+
+func (suite *ContentSuite) TestShouldFailDecryptWithInvalidKey() {
+	key := []byte{1, 2, 3, 4, 5}
+	_, err := request.Content{}.Decrypt(request.AESCTR, key)
+	suite.Require().Error(err)
+	suite.Logger.Errorf("Expected Error!", err)
+	suite.Assert().ErrorIs(err, errors.ArgumentInvalid, "Error should be an Argument Invalid Error")
+	var details errors.Error
+	suite.Require().ErrorAs(err, &details)
+	suite.Assert().Equal("key", details.What)
+	suite.Assert().Equal(key, details.Value.([]byte))
+	suite.Assert().ErrorIs(err, aes.KeySizeError(len(key)), "Error should be a KeySizeError")
+	suite.Require().NotNil(details.Cause, "Error should have a cause")
+	suite.Assert().Equal("crypto/aes: invalid key size 5", details.Cause.Error())
+}
+
+func (suite *ContentSuite) TestShouldFailEncryptWithInvalidAlgorithm() {
+	_, err := request.Content{}.Encrypt(request.CryptoAlgorithm(10), []byte{})
+	suite.Require().Error(err)
+	suite.Logger.Errorf("Expected Error!", err)
+	suite.Assert().ErrorIs(err, errors.InvalidType, "Error should be an Invalid Type Error")
+	var details errors.Error
+	suite.Require().ErrorAs(err, &details)
+	suite.Assert().Equal("Unknown 10", details.What)
+}
+
+func (suite *ContentSuite) TestShouldFailEncryptWithInvalidKey() {
+	key := []byte{1, 2, 3, 4, 5}
+	_, err := request.Content{}.Encrypt(request.AESCTR, key)
+	suite.Require().Error(err)
+	suite.Logger.Errorf("Expected Error!", err)
+	suite.Assert().ErrorIs(err, errors.ArgumentInvalid, "Error should be an Argument Invalid Error")
+	var details errors.Error
+	suite.Require().ErrorAs(err, &details)
+	suite.Assert().Equal("key", details.What)
+	suite.Assert().Equal(key, details.Value.([]byte))
+	suite.Assert().ErrorIs(err, aes.KeySizeError(len(key)), "Error should be a KeySizeError")
+	suite.Require().NotNil(details.Cause, "Error should have a cause")
+	suite.Assert().Equal("crypto/aes: invalid key size 5", details.Cause.Error())
 }
