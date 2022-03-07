@@ -3,6 +3,7 @@ package request
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"encoding/json"
 	"fmt"
 
 	"github.com/gildas/go-errors"
@@ -10,19 +11,45 @@ import (
 
 type CryptoAlgorithm uint
 const (
-	AESCTR CryptoAlgorithm = iota
+	NONE CryptoAlgorithm = iota
+	AESCTR
 )
 
 func (algorithm CryptoAlgorithm) String() string {
-	algorithms := [...]string{"AESCTR"}
+	algorithms := [...]string{"NONE", "AESCTR"}
 	if int(algorithm) > len(algorithms) {
 		return fmt.Sprintf("Unknown %d", algorithm)
 	}
-	return [...]string{"AESCTR"}[algorithm]
+	return algorithms[algorithm]
+}
+
+func CryptoAlgorithmFromString(algorithm string) (CryptoAlgorithm, error) {
+	switch algorithm {
+	case "NONE":
+		return NONE, nil
+	case "AESCTR":
+		return AESCTR, nil
+	}
+	return NONE, errors.ArgumentInvalid.With("algorithm", algorithm)
+}
+
+func (algorithm CryptoAlgorithm) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf("\"%s\"", algorithm.String())), nil
+}
+
+func (algorithm *CryptoAlgorithm) UnmarshalJSON(data []byte) (err error) {
+	var value string
+	if err = json.Unmarshal(data, &value); err != nil {
+		return errors.JSONUnmarshalError.Wrap(err)
+	}
+	*algorithm, err = CryptoAlgorithmFromString(value)
+	return errors.JSONUnmarshalError.Wrap(err)
 }
 
 func (content Content) Decrypt(algorithm CryptoAlgorithm, key []byte) (*Content, error) {
 	switch algorithm {
+	case NONE:
+		return &content, nil
 	case AESCTR:
 		return content.DecryptWithAESCTR(key)
 	}
@@ -52,6 +79,8 @@ func (content Content) DecryptWithAESCTR(key []byte) (*Content, error) {
 
 func (content Content) Encrypt(algorithm CryptoAlgorithm, key []byte) (*Content, error) {
 	switch algorithm {
+	case NONE:
+		return &content, nil
 	case AESCTR:
 		return content.EncryptWithAESCTR(key)
 	}
