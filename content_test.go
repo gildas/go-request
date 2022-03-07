@@ -399,6 +399,68 @@ func (suite *ContentSuite) TestShouldFailUnmarshallWithBogusData() {
 	suite.Assert().ErrorIs(err, errors.JSONUnmarshalError, "Error should be a JSON Unmarshal Error")
 }
 
+func (suite *ContentSuite) TestCanMarshalCryptoAlgorithm() {
+	algorithm := request.NONE
+	payload, err := json.Marshal(algorithm)
+	suite.Require().NoErrorf(err, "Failed to marshal algorithm, error: %s", err)
+	suite.Assert().Equal(`"NONE"`, string(payload))
+
+	algorithm = request.AESCTR
+	payload, err = json.Marshal(algorithm)
+	suite.Require().NoErrorf(err, "Failed to marshal algorithm, error: %s", err)
+	suite.Assert().Equal(`"AESCTR"`, string(payload))
+}
+
+func (suite *ContentSuite) TestCanUnmarshalCryptoAlgorithm() {
+	payload := `"AESCTR"`
+	algorithm := request.CryptoAlgorithm(0)
+	err := json.Unmarshal([]byte(payload), &algorithm)
+	suite.Require().NoErrorf(err, "Failed to unmarshal algorithm, error: %s", err)
+	suite.Assert().Equal(request.AESCTR, algorithm)
+
+	payload = `"NONE"`
+	algorithm = request.CryptoAlgorithm(0)
+	err = json.Unmarshal([]byte(payload), &algorithm)
+	suite.Require().NoErrorf(err, "Failed to unmarshal algorithm, error: %s", err)
+	suite.Assert().Equal(request.NONE, algorithm)
+
+	payload = `1`
+	algorithm = request.CryptoAlgorithm(0)
+	err = json.Unmarshal([]byte(payload), &algorithm)
+	suite.Require().Errorf(err, "Should have failed to unmarshal algorithm")
+	suite.Assert().ErrorIs(err, errors.JSONUnmarshalError, "Error should be a JSON Unmarshal Error")
+
+	payload = `"INVALID"`
+	algorithm = request.CryptoAlgorithm(0)
+	err = json.Unmarshal([]byte(payload), &algorithm)
+	suite.Require().Errorf(err, "Should have failed to unmarshal algorithm")
+	suite.Assert().ErrorIs(err, errors.JSONUnmarshalError, "Error should be a JSON Unmarshal Error")
+	suite.Assert().ErrorIs(err, errors.ArgumentInvalid, "Error should be an Argument Invalid Error")
+	details, found := errors.ArgumentInvalid.Extract(err)
+	suite.Require().True(found, "Error should be an Argument Invalid Error")
+	suite.Assert().Equal("algorithm", details.What)
+	suite.Assert().Equal("INVALID", details.Value)
+}
+
+func (suite *ContentSuite) TestCanDecryptWithNONE() {
+	encrypted := []byte{0x17, 0x07, 0x26, 0x56, 0xd4, 0x11, 0x16, 0x9d,  0x4d, 0xe5, 0x0a, 0xb9, 0x08, 0xd7, 0xb3, 0x3b }
+	decrypted := []byte{0x17, 0x07, 0x26, 0x56, 0xd4, 0x11, 0x16, 0x9d,  0x4d, 0xe5, 0x0a, 0xb9, 0x08, 0xd7, 0xb3, 0x3b }
+
+	key := []byte{}
+	content := request.Content{
+		Type:   "image/jpeg",
+		Length: uint64(len(encrypted)),
+		Data:   encrypted,
+	}
+
+	suite.Assert().Equal("NONE", request.NONE.String())
+	decryptedContent, err := content.Decrypt(request.NONE, key)
+	suite.Require().NoError(err, "Failed to decrypt content")
+	suite.Require().Lenf(decryptedContent.Data, len(decrypted), "Decrypted content should be %d", len(decrypted))
+	suite.Require().Equal(decryptedContent.Length, uint64(len(decrypted)), "Decrypted content should be %d", len(decrypted))
+	suite.Assert().Equal(decrypted, decryptedContent.Data, "Decrypted content is incorrect")
+}
+
 func (suite *ContentSuite) TestCanDecryptWithAESCTR() {
 	encrypted := []byte{0xa9, 0x09, 0x20, 0xf8, 0x77, 0x58, 0x30, 0xee,  0x91, 0x22, 0x18, 0x5c, 0x1a, 0xfd, 0x2d, 0xf2}
 	decrypted := []byte{0x17, 0x07, 0x26, 0x56, 0xd4, 0x11, 0x16, 0x9d,  0x4d, 0xe5, 0x0a, 0xb9, 0x08, 0xd7, 0xb3, 0x3b }
@@ -415,6 +477,25 @@ func (suite *ContentSuite) TestCanDecryptWithAESCTR() {
 	suite.Require().Lenf(decryptedContent.Data, len(decrypted), "Decrypted content should be %d", len(decrypted))
 	suite.Require().Equal(decryptedContent.Length, uint64(len(decrypted)), "Decrypted content should be %d", len(decrypted))
 	suite.Assert().Equal(decrypted, decryptedContent.Data, "Decrypted content is incorrect")
+}
+
+func (suite *ContentSuite) TestCanEncryptWithNONE() {
+	encrypted := []byte{0x17, 0x07, 0x26, 0x56, 0xd4, 0x11, 0x16, 0x9d,  0x4d, 0xe5, 0x0a, 0xb9, 0x08, 0xd7, 0xb3, 0x3b }
+	decrypted := []byte{0x17, 0x07, 0x26, 0x56, 0xd4, 0x11, 0x16, 0x9d,  0x4d, 0xe5, 0x0a, 0xb9, 0x08, 0xd7, 0xb3, 0x3b }
+
+	key := []byte{}
+	content := request.Content{
+		Type:   "image/jpeg",
+		Length: uint64(len(encrypted)),
+		Data:   decrypted,
+	}
+
+	suite.Assert().Equal("NONE", request.NONE.String())
+	encryptedContent, err := content.Encrypt(request.NONE, key)
+	suite.Require().NoError(err, "Failed to decrypt content")
+	suite.Require().Lenf(encryptedContent.Data, len(decrypted), "Encrypted content should be %d", len(encrypted))
+	suite.Require().Equal(encryptedContent.Length, uint64(len(decrypted)), "Encrypted content should be %d", len(encrypted))
+	suite.Assert().Equal(encrypted, encryptedContent.Data, "Encrypted content is incorrect")
 }
 
 func (suite *ContentSuite) TestCanEncryptWithAESCTR() {
