@@ -81,11 +81,11 @@ func (suite *RequestSuite) TestCanSendRequestWithTransport() {
 	proxyURL, _ := url.Parse(suite.Proxy.URL)
 	transport := &http.Transport{}
 	content, err := request.Send(&request.Options{
-		URL:      serverURL,
-		Proxy:    proxyURL,
+		URL:       serverURL,
+		Proxy:     proxyURL,
 		Transport: transport,
-		Attempts: 1,
-		Logger:   suite.Logger,
+		Attempts:  1,
+		Logger:    suite.Logger,
 	}, nil)
 	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
 	suite.Require().NotNil(content, "Content should not be nil")

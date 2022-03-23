@@ -10,6 +10,7 @@ import (
 )
 
 type CryptoAlgorithm uint
+
 const (
 	NONE CryptoAlgorithm = iota
 	AESCTR
