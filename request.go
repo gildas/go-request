@@ -41,6 +41,7 @@ type Options struct {
 	Authorization        string
 	RequestID            string
 	UserAgent            string
+	Transport            *http.Transport
 	RetryableStatusCodes []int
 	Attempts             int
 	InterAttemptDelay    time.Duration
@@ -125,7 +126,21 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		}
 	}
 
+	var transport http.RoundTripper
+
+	if options.Proxy != nil {
+		if options.Transport == nil {
+			options.Transport = &http.Transport{Proxy: http.ProxyURL(options.Proxy)}
+		} else {
+			options.Transport.Proxy = http.ProxyURL(options.Proxy)
+		}
+		transport = options.Transport
+	} else {
+		transport = http.DefaultTransport
+	}
+
 	httpclient := http.Client{
+		Transport: transport,
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
 			log.Tracef("Following WEB Link: %s", r.URL)
 			for _, v := range via {
@@ -135,10 +150,6 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		},
 		Timeout: options.Timeout,
 	}
-	if options.Proxy != nil {
-		httpclient.Transport = &http.Transport{Proxy: http.ProxyURL(options.Proxy)}
-	}
-
 	// Sending the request...
 	for attempt := 0; attempt < options.Attempts; attempt++ {
 		log.Tracef("Attempt #%d/%d", attempt+1, options.Attempts)
