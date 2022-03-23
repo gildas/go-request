@@ -76,6 +76,22 @@ func (suite *RequestSuite) TestCanSendRequestWithProxy() {
 	suite.Assert().Equal("body", string(content.Data))
 }
 
+func (suite *RequestSuite) TestCanSendRequestWithTransport() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	proxyURL, _ := url.Parse(suite.Proxy.URL)
+	transport := &http.Transport{}
+	content, err := request.Send(&request.Options{
+		URL:      serverURL,
+		Proxy:    proxyURL,
+		Transport: transport,
+		Attempts: 1,
+		Logger:   suite.Logger,
+	}, nil)
+	suite.Require().Nil(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("body", string(content.Data))
+}
+
 func (suite *RequestSuite) TestCanSendRequestWithLogSizeOptions() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	content, err := request.Send(&request.Options{
