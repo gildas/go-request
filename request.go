@@ -126,21 +126,8 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		}
 	}
 
-	var transport http.RoundTripper
-
-	if options.Proxy != nil {
-		if options.Transport == nil {
-			options.Transport = &http.Transport{Proxy: http.ProxyURL(options.Proxy)}
-		} else {
-			options.Transport.Proxy = http.ProxyURL(options.Proxy)
-		}
-		transport = options.Transport
-	} else {
-		transport = http.DefaultTransport
-	}
-
 	httpclient := http.Client{
-		Transport: transport,
+		Transport: options.Transport,
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
 			log.Tracef("Following WEB Link: %s", r.URL)
 			for _, v := range via {
@@ -315,6 +302,13 @@ func normalizeOptions(options *Options, results interface{}) (err error) {
 		}
 		options.URL.RawQuery = query.Encode()
 	}
+	if options.Transport == nil  {
+		options.Transport = http.DefaultTransport.(*http.Transport).Clone()
+	}
+	if options.Proxy != nil {
+		options.Transport.Proxy = http.ProxyURL(options.Proxy)
+	}
+
 	return nil
 }
 
