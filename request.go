@@ -76,55 +76,11 @@ func Send(options *Options, results interface{}) (*Content, error) {
 	log := options.Logger.Child(nil, "request", "reqid", options.RequestID, "method", options.Method)
 
 	log.Debugf("HTTP %s %s", options.Method, options.URL.String())
-	reqContent, err := buildRequestContent(log, options)
+	req, err := buildRequest(log, options)
 	if err != nil {
 		return nil, err // err is already decorated
 	}
-	if len(options.Method) == 0 {
-		if reqContent.Length > 0 {
-			options.Method = "POST"
-		} else {
-			options.Method = "GET"
-		}
-		log = log.Record("method", options.Method)
-		log.Tracef("Computed HTTP method: %s", options.Method)
-	} else {
-		log = log.Record("method", options.Method)
-	}
-	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reqContent.Reader())
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	// Close indicates to close the connection or after sending this request and reading its response.
-	// setting this field prevents re-use of TCP connections between requests to the same hosts, as if Transport.DisableKeepAlives were set.
-	req.Close = true
-
-	// Setting request headers
-	req.Header.Set("User-Agent", options.UserAgent)
-	req.Header.Set("Accept", options.Accept)
-	req.Header.Set("Accept-Encoding", "gzip")
-	req.Header.Add("Accept-Encoding", "deflate")
-	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("X-Request-Id", options.RequestID)
-	if len(options.Authorization) > 0 {
-		req.Header.Set("Authorization", options.Authorization)
-	}
-	if len(reqContent.Type) > 0 {
-		req.Header.Set("Content-Type", reqContent.Type)
-	}
-	if reqContent.Length > 0 {
-		req.Header.Set("Content-Length", strconv.FormatUint(reqContent.Length, 10))
-	}
-	for key, value := range options.Headers {
-		req.Header.Set(key, value)
-	}
-
-	if len(options.Cookies) > 0 {
-		for _, cookie := range options.Cookies {
-			req.AddCookie(cookie)
-		}
-	}
+	log = log.Record("method", options.Method)
 
 	httpclient := http.Client{
 		Transport: options.Transport,
@@ -154,8 +110,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 						log.Warnf("Temporary failed to send request (duration: %s/%s), Error: %s", duration, options.Timeout, err.Error()) // we don't want the stack here
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 						time.Sleep(options.InterAttemptDelay)
-						reqContent, _ := buildRequestContent(log, options)
-						req.Body = reqContent.ReadCloser()
+						req, _ = buildRequest(log, options)
 						continue
 					}
 					break
@@ -177,8 +132,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 					log.Warnf("Retryable Response Status: %s", res.Status)
 					log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 					time.Sleep(options.InterAttemptDelay)
-					reqContent, _ := buildRequestContent(log, options)
-					req.Body = reqContent.ReadCloser()
+					req, _ = buildRequest(log, options)
 					continue
 				}
 			}
@@ -308,6 +262,13 @@ func normalizeOptions(options *Options, results interface{}) (err error) {
 	if options.Proxy != nil {
 		options.Transport.Proxy = http.ProxyURL(options.Proxy)
 	}
+	if options.Attempts > 1 {
+		if options.Attachment != nil {
+			if _, ok := options.Attachment.(io.Seeker); !ok {
+				return errors.New("Attachment must be an io.Seeker").(errors.Error).Wrap(errors.ArgumentInvalid.With("attachment"))
+			}
+		}
+	}
 
 	return nil
 }
@@ -429,6 +390,10 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 				if err != nil {
 					return nil, errors.Wrapf(err, "Failed to create multipart for field %s", key)
 				}
+				_, err = options.Attachment.(io.Seeker).Seek(0, io.SeekStart)
+				if err != nil {
+					return nil, errors.Wrapf(err, "Failed to seek to beginning of attachment for field %s", key)
+				}
 				written, err := io.Copy(part, options.Attachment)
 				if err != nil {
 					return nil, errors.Errorf("Failed to write attachment to multipart form field %s", key)
@@ -457,7 +422,58 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 		}
 		return content, nil
 	}
-	return nil, errors.Errorf("Unsupported Payload: %s", payloadType.Kind().String())
+	return nil, errors.InvalidType.With(payloadType.Kind().String(), "request.Content, io.Reader, struct, slice, or map")
+}
+
+func buildRequest(log *logger.Logger, options *Options) (*http.Request, error) {
+	reqContent, err := buildRequestContent(log, options)
+	if err != nil {
+		return nil, err // err is already decorated
+	}
+	if len(options.Method) == 0 {
+		if reqContent.Length > 0 {
+			options.Method = "POST"
+		} else {
+			options.Method = "GET"
+		}
+		log.Tracef("Computed HTTP method: %s", options.Method)
+	}
+
+	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reqContent.Reader())
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	// Close indicates to close the connection or after sending this request and reading its response.
+	// setting this field prevents re-use of TCP connections between requests to the same hosts, as if Transport.DisableKeepAlives were set.
+	req.Close = true
+
+	// Setting request headers
+	req.Header.Set("User-Agent", options.UserAgent)
+	req.Header.Set("Accept", options.Accept)
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Add("Accept-Encoding", "deflate")
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("X-Request-Id", options.RequestID)
+	if len(options.Authorization) > 0 {
+		req.Header.Set("Authorization", options.Authorization)
+	}
+	if len(reqContent.Type) > 0 {
+		req.Header.Set("Content-Type", reqContent.Type)
+	}
+	if reqContent.Length > 0 {
+		req.Header.Set("Content-Length", strconv.FormatUint(reqContent.Length, 10))
+	}
+	for key, value := range options.Headers {
+		req.Header.Set(key, value)
+	}
+
+	if len(options.Cookies) > 0 {
+		for _, cookie := range options.Cookies {
+			req.AddCookie(cookie)
+		}
+	}
+	return req, nil
 }
 
 func isRetryable(statusCode int, retryableStatusCodes []int) bool {
