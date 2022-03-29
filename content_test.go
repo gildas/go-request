@@ -436,8 +436,8 @@ func (suite *ContentSuite) TestCanUnmarshalCryptoAlgorithm() {
 	suite.Require().Errorf(err, "Should have failed to unmarshal algorithm")
 	suite.Assert().ErrorIs(err, errors.JSONUnmarshalError, "Error should be a JSON Unmarshal Error")
 	suite.Assert().ErrorIs(err, errors.ArgumentInvalid, "Error should be an Argument Invalid Error")
-	details, found := errors.ArgumentInvalid.Extract(err)
-	suite.Require().True(found, "Error should be an Argument Invalid Error")
+	details := errors.ArgumentInvalid.Clone()
+	suite.Require().ErrorAs(err, &details, "Error should contain an Invalid Error")
 	suite.Assert().Equal("algorithm", details.What)
 	suite.Assert().Equal("INVALID", details.Value)
 }
@@ -537,8 +537,8 @@ func (suite *ContentSuite) TestShouldFailDecryptWithInvalidKey() {
 	suite.Assert().Equal("key", details.What)
 	suite.Assert().Equal(key, details.Value.([]byte))
 	suite.Assert().ErrorIs(err, aes.KeySizeError(len(key)), "Error should be a KeySizeError")
-	suite.Require().NotNil(details.Cause, "Error should have a cause")
-	suite.Assert().Equal("crypto/aes: invalid key size 5", details.Cause.Error())
+	suite.Require().NotNil(details.HasCauses(), "Error should have a cause")
+	suite.Assert().Equal("crypto/aes: invalid key size 5", details.Causes[0].Error())
 }
 
 func (suite *ContentSuite) TestShouldFailEncryptWithInvalidAlgorithm() {
@@ -562,6 +562,6 @@ func (suite *ContentSuite) TestShouldFailEncryptWithInvalidKey() {
 	suite.Assert().Equal("key", details.What)
 	suite.Assert().Equal(key, details.Value.([]byte))
 	suite.Assert().ErrorIs(err, aes.KeySizeError(len(key)), "Error should be a KeySizeError")
-	suite.Require().NotNil(details.Cause, "Error should have a cause")
-	suite.Assert().Equal("crypto/aes: invalid key size 5", details.Cause.Error())
+	suite.Require().NotNil(details.HasCauses(), "Error should have a cause")
+	suite.Assert().Equal("crypto/aes: invalid key size 5", details.Causes[0].Error())
 }

@@ -12,7 +12,7 @@ import (
 type failingReader int
 
 func (r failingReader) Read(data []byte) (int, error) {
-	return 0, errors.NotImplemented.New()
+	return 0, errors.NotImplemented.WithStack()
 }
 func (r failingReader) Close() error {
 	return nil
