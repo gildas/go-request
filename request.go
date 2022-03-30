@@ -424,7 +424,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 		}
 		return content, nil
 	}
-	return nil, errors.InvalidType.With(payloadType.Kind().String(), "request.Content, io.Reader, struct, slice, or map")
+	return nil, errors.ArgumentInvalid.With("payload")
 }
 
 func buildRequest(log *logger.Logger, options *Options) (*http.Request, error) {
