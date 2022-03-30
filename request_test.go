@@ -377,12 +377,28 @@ func (suite *RequestSuite) TestCanSendRequestWithSlicePayload() {
 	suite.Assert().Equal("2", string(content.Data))
 }
 
+func (suite *RequestSuite) TestCanSendRequestWithByteSlicePayload() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/bytes")
+	content, err := request.Send(&request.Options{
+		Method: http.MethodPost,
+		URL:    serverURL,
+		PayloadType: "application/octet-stream",
+		Payload: []byte{1, 2, 3, 4},
+		Logger: suite.Logger,
+	}, nil)
+	suite.Require().NoError(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("4", string(content.Data))
+}
+
 func (suite *RequestSuite) TestCanSendRequestWithSlicePayloadAndNoReqLogSize() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/items")
 	content, err := request.Send(&request.Options{
 		Method: http.MethodDelete,
 		URL:    serverURL,
+		PayloadType: "application/json",
 		Payload: []struct{ ID string }{
 			{ID: "1234"},
 			{ID: "5678"},
