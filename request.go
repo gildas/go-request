@@ -334,19 +334,25 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 			}
 			content = ContentWithData(payload, options.PayloadType)
 		} else if payloadType.Kind() == reflect.Array || payloadType.Kind() == reflect.Slice {
-			log.Tracef("Payload is an array or a slice, JSONifying it")
+			switch options.PayloadType {
 			// TODO: Add other payload types like XML, etc
-			if len(options.PayloadType) == 0 {
+			case "application/octet-stream":
+				log.Tracef("Payload is an array or a slice and its type is application/octet-stream, storing in as a Content")
+				content = ContentWithData(options.Payload.([]byte), options.PayloadType)
+			case "application/json":
+				fallthrough
+			default:
+				log.Tracef("Payload is an array or a slice, JSONifying it")
 				options.PayloadType = "application/json"
-			}
-			payload, err := json.Marshal(options.Payload)
-			if err != nil {
-				if errors.Is(err, errors.JSONMarshalError) {
-					return nil, err
+				payload, err := json.Marshal(options.Payload)
+				if err != nil {
+					if errors.Is(err, errors.JSONMarshalError) {
+						return nil, err
+					}
+					return nil, errors.JSONMarshalError.Wrap(err)
 				}
-				return nil, errors.JSONMarshalError.Wrap(err)
+				content = ContentWithData(payload, options.PayloadType)
 			}
-			content = ContentWithData(payload, options.PayloadType)
 		} else if payloadType.Kind() == reflect.Map {
 			// Collect the attributes from the map
 			attributes := map[string]string{}
