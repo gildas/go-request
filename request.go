@@ -76,55 +76,11 @@ func Send(options *Options, results interface{}) (*Content, error) {
 	log := options.Logger.Child(nil, "request", "reqid", options.RequestID, "method", options.Method)
 
 	log.Debugf("HTTP %s %s", options.Method, options.URL.String())
-	reqContent, err := buildRequestContent(log, options)
+	req, err := buildRequest(log, options)
 	if err != nil {
 		return nil, err // err is already decorated
 	}
-	if len(options.Method) == 0 {
-		if reqContent.Length > 0 {
-			options.Method = "POST"
-		} else {
-			options.Method = "GET"
-		}
-		log = log.Record("method", options.Method)
-		log.Tracef("Computed HTTP method: %s", options.Method)
-	} else {
-		log = log.Record("method", options.Method)
-	}
-	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reqContent.Reader())
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	// Close indicates to close the connection or after sending this request and reading its response.
-	// setting this field prevents re-use of TCP connections between requests to the same hosts, as if Transport.DisableKeepAlives were set.
-	req.Close = true
-
-	// Setting request headers
-	req.Header.Set("User-Agent", options.UserAgent)
-	req.Header.Set("Accept", options.Accept)
-	req.Header.Set("Accept-Encoding", "gzip")
-	req.Header.Add("Accept-Encoding", "deflate")
-	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("X-Request-Id", options.RequestID)
-	if len(options.Authorization) > 0 {
-		req.Header.Set("Authorization", options.Authorization)
-	}
-	if len(reqContent.Type) > 0 {
-		req.Header.Set("Content-Type", reqContent.Type)
-	}
-	if reqContent.Length > 0 {
-		req.Header.Set("Content-Length", strconv.FormatUint(reqContent.Length, 10))
-	}
-	for key, value := range options.Headers {
-		req.Header.Set(key, value)
-	}
-
-	if len(options.Cookies) > 0 {
-		for _, cookie := range options.Cookies {
-			req.AddCookie(cookie)
-		}
-	}
+	log = log.Record("method", options.Method)
 
 	httpclient := http.Client{
 		Transport: options.Transport,
@@ -154,8 +110,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 						log.Warnf("Temporary failed to send request (duration: %s/%s), Error: %s", duration, options.Timeout, err.Error()) // we don't want the stack here
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 						time.Sleep(options.InterAttemptDelay)
-						reqContent, _ := buildRequestContent(log, options)
-						req.Body = reqContent.ReadCloser()
+						req, _ = buildRequest(log, options)
 						continue
 					}
 					break
@@ -177,8 +132,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 					log.Warnf("Retryable Response Status: %s", res.Status)
 					log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 					time.Sleep(options.InterAttemptDelay)
-					reqContent, _ := buildRequestContent(log, options)
-					req.Body = reqContent.ReadCloser()
+					req, _ = buildRequest(log, options)
 					continue
 				}
 			}
@@ -308,6 +262,20 @@ func normalizeOptions(options *Options, results interface{}) (err error) {
 	if options.Proxy != nil {
 		options.Transport.Proxy = http.ProxyURL(options.Proxy)
 	}
+	if options.Attempts > 1 {
+		if options.Payload != nil {
+			if _, ok := options.Payload.(io.Reader); ok {
+				if _, ok := options.Payload.(io.Seeker); !ok {
+					return errors.New("Payload must be an io.Seeker").(errors.Error).Wrap(errors.ArgumentInvalid.With("payload"))
+				}
+			}
+		}
+		if options.Attachment != nil {
+			if _, ok := options.Attachment.(io.Seeker); !ok {
+				return errors.New("Attachment must be an io.Seeker").(errors.Error).Wrap(errors.ArgumentInvalid.With("attachment"))
+			}
+		}
+	}
 
 	return nil
 }
@@ -326,7 +294,6 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 		}
 	}
 
-	payloadType := reflect.TypeOf(options.Payload)
 	if _content, ok := options.Payload.(Content); ok {
 		log.Tracef("Payload is a Content (Type: %s, size: %d)", _content.Type, _content.Length)
 		if len(_content.Type) == 0 {
@@ -350,104 +317,117 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 	} else if reader, ok := options.Payload.(io.Reader); ok {
 		log.Tracef("Payload is a Reader (Data Type: %s)", options.PayloadType)
 		content, _ = ContentFromReader(reader, options.PayloadType, 0, nil, nil)
-	} else if payloadType.Kind() == reflect.Struct || (payloadType.Kind() == reflect.Ptr && reflect.Indirect(reflect.ValueOf(options.Payload)).Kind() == reflect.Struct) { // JSONify the payload
-		log.Tracef("Payload is a Struct, JSONifying it")
-		// TODO: Add other payload types like XML, etc
-		if len(options.PayloadType) == 0 {
-			options.PayloadType = "application/json"
-		}
-		payload, err := json.Marshal(options.Payload)
-		if err != nil {
-			if errors.Is(err, errors.JSONMarshalError) {
-				return nil, err
-			}
-			return nil, errors.JSONMarshalError.Wrap(err)
-		}
-		content = ContentWithData(payload, options.PayloadType)
-	} else if payloadType.Kind() == reflect.Array || payloadType.Kind() == reflect.Slice {
-		log.Tracef("Payload is an array or a slice, JSONifying it")
-		// TODO: Add other payload types like XML, etc
-		if len(options.PayloadType) == 0 {
-			options.PayloadType = "application/json"
-		}
-		payload, err := json.Marshal(options.Payload)
-		if err != nil {
-			if errors.Is(err, errors.JSONMarshalError) {
-				return nil, err
-			}
-			return nil, errors.JSONMarshalError.Wrap(err)
-		}
-		content = ContentWithData(payload, options.PayloadType)
-	} else if payloadType.Kind() == reflect.Map {
-		// Collect the attributes from the map
-		attributes := map[string]string{}
-		if stringMap, ok := options.Payload.(map[string]string); ok {
-			log.Tracef("Payload is a StringMap")
-			attributes = stringMap
-		} else { // traverse the map, collecting values if they are Stringer. Note: This can be slow...
-			log.Tracef("Payload is a Map")
-			items := reflect.ValueOf(options.Payload)
-			for _, item := range items.MapKeys() {
-				value := items.MapIndex(item)
-				if stringer, ok := value.Interface().(fmt.Stringer); ok {
-					attributes[item.String()] = stringer.String()
-				}
-			}
-		}
-
-		// Build the content as a Form or a Multipart Data Form
-		if options.Attachment == nil {
-			log.Tracef("Building a form (no attachment)")
+	} else {
+		payloadType := reflect.TypeOf(options.Payload)
+		if payloadType.Kind() == reflect.Struct || (payloadType.Kind() == reflect.Ptr && reflect.Indirect(reflect.ValueOf(options.Payload)).Kind() == reflect.Struct) { // JSONify the payload
+			log.Tracef("Payload is a Struct, JSONifying it")
+			// TODO: Add other payload types like XML, etc
 			if len(options.PayloadType) == 0 {
-				options.PayloadType = "application/x-www-form-urlencoded"
+				options.PayloadType = "application/json"
 			}
-			form := url.Values{}
-			for key, value := range attributes {
-				form.Set(key, value)
+			payload, err := json.Marshal(options.Payload)
+			if err != nil {
+				if errors.Is(err, errors.JSONMarshalError) {
+					return nil, err
+				}
+				return nil, errors.JSONMarshalError.Wrap(err)
 			}
-			return ContentWithData([]byte(form.Encode()), options.PayloadType), nil
-		}
+			content = ContentWithData(payload, options.PayloadType)
+		} else if payloadType.Kind() == reflect.Array || payloadType.Kind() == reflect.Slice {
+			switch options.PayloadType {
+			// TODO: Add other payload types like XML, etc
+			case "application/octet-stream":
+				log.Tracef("Payload is an array or a slice and its type is application/octet-stream, storing in as a Content")
+				content = ContentWithData(options.Payload.([]byte), options.PayloadType)
+			case "application/json":
+				fallthrough
+			default:
+				log.Tracef("Payload is an array or a slice, JSONifying it")
+				options.PayloadType = "application/json"
+				payload, err := json.Marshal(options.Payload)
+				if err != nil {
+					if errors.Is(err, errors.JSONMarshalError) {
+						return nil, err
+					}
+					return nil, errors.JSONMarshalError.Wrap(err)
+				}
+				content = ContentWithData(payload, options.PayloadType)
+			}
+		} else if payloadType.Kind() == reflect.Map {
+			// Collect the attributes from the map
+			attributes := map[string]string{}
+			if stringMap, ok := options.Payload.(map[string]string); ok {
+				log.Tracef("Payload is a StringMap")
+				attributes = stringMap
+			} else { // traverse the map, collecting values if they are Stringer. Note: This can be slow...
+				log.Tracef("Payload is a Map")
+				items := reflect.ValueOf(options.Payload)
+				for _, item := range items.MapKeys() {
+					value := items.MapIndex(item)
+					if stringer, ok := value.Interface().(fmt.Stringer); ok {
+						attributes[item.String()] = stringer.String()
+					}
+				}
+			}
 
-		log.Tracef("Building a multipart data form with 1 attachment")
-		body := &bytes.Buffer{}
-		writer := multipart.NewWriter(body)
-		for key, value := range attributes {
-			if strings.HasPrefix(key, ">") {
-				key = strings.TrimPrefix(key, ">")
-				if len(key) == 0 {
-					return nil, errors.Errorf("Empty key for multipart form field with attachment")
+			// Build the content as a Form or a Multipart Data Form
+			if options.Attachment == nil {
+				log.Tracef("Building a form (no attachment)")
+				if len(options.PayloadType) == 0 {
+					options.PayloadType = "application/x-www-form-urlencoded"
 				}
-				if len(value) == 0 {
-					return nil, errors.Errorf("Empty value for multipart form field %s", key)
+				form := url.Values{}
+				for key, value := range attributes {
+					form.Set(key, value)
 				}
-				partHeader := textproto.MIMEHeader{}
-				partHeader.Add("Content-Disposition", fmt.Sprintf("form-data; name=\"%s\"; filename=\"%s\"", key, value))
-				if len(options.AttachmentType) > 0 {
-					partHeader.Add("Content-Type", options.AttachmentType)
-				}
-				part, err := writer.CreatePart(partHeader)
-				if err != nil {
-					return nil, errors.Wrapf(err, "Failed to create multipart for field %s", key)
-				}
-				written, err := io.Copy(part, options.Attachment)
-				if err != nil {
-					return nil, errors.Errorf("Failed to write attachment to multipart form field %s", key)
-				}
-				if written == 0 {
-					return nil, errors.Errorf("Missing/Empty Attachment for multipart form field %s", key)
-				}
-				log.Tracef("Wrote %d bytes to multipart form field %s", written, key)
-			} else {
-				if err := writer.WriteField(key, value); err != nil {
-					return nil, errors.Wrapf(err, "Failed to create multipart form field %s", key)
-				}
-				log.Tracef("  Added field %s = %s", key, value)
+				return ContentWithData([]byte(form.Encode()), options.PayloadType), nil
 			}
+
+			log.Tracef("Building a multipart data form with 1 attachment")
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+			for key, value := range attributes {
+				if strings.HasPrefix(key, ">") {
+					key = strings.TrimPrefix(key, ">")
+					if len(key) == 0 {
+						return nil, errors.Errorf("Empty key for multipart form field with attachment")
+					}
+					if len(value) == 0 {
+						return nil, errors.Errorf("Empty value for multipart form field %s", key)
+					}
+					partHeader := textproto.MIMEHeader{}
+					partHeader.Add("Content-Disposition", fmt.Sprintf("form-data; name=\"%s\"; filename=\"%s\"", key, value))
+					if len(options.AttachmentType) > 0 {
+						partHeader.Add("Content-Type", options.AttachmentType)
+					}
+					part, err := writer.CreatePart(partHeader)
+					if err != nil {
+						return nil, errors.Wrapf(err, "Failed to create multipart for field %s", key)
+					}
+					_, err = options.Attachment.(io.Seeker).Seek(0, io.SeekStart)
+					if err != nil {
+						return nil, errors.Wrapf(err, "Failed to seek to beginning of attachment for field %s", key)
+					}
+					written, err := io.Copy(part, options.Attachment)
+					if err != nil {
+						return nil, errors.Errorf("Failed to write attachment to multipart form field %s", key)
+					}
+					if written == 0 {
+						return nil, errors.Errorf("Missing/Empty Attachment for multipart form field %s", key)
+					}
+					log.Tracef("Wrote %d bytes to multipart form field %s", written, key)
+				} else {
+					if err := writer.WriteField(key, value); err != nil {
+						return nil, errors.Wrapf(err, "Failed to create multipart form field %s", key)
+					}
+					log.Tracef("  Added field %s = %s", key, value)
+				}
+			}
+			if err := writer.Close(); err != nil {
+				return nil, errors.Wrap(err, "Failed to create multipart data")
+			}
+			content, _ = ContentFromReader(body, writer.FormDataContentType())
 		}
-		if err := writer.Close(); err != nil {
-			return nil, errors.Wrap(err, "Failed to create multipart data")
-		}
-		content, _ = ContentFromReader(body, writer.FormDataContentType())
 	}
 	if content != nil {
 		if options.RequestBodyLogSize > 0 {
@@ -457,7 +437,58 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 		}
 		return content, nil
 	}
-	return nil, errors.Errorf("Unsupported Payload: %s", payloadType.Kind().String())
+	return nil, errors.ArgumentInvalid.With("payload")
+}
+
+func buildRequest(log *logger.Logger, options *Options) (*http.Request, error) {
+	reqContent, err := buildRequestContent(log, options)
+	if err != nil {
+		return nil, err // err is already decorated
+	}
+	if len(options.Method) == 0 {
+		if reqContent.Length > 0 {
+			options.Method = "POST"
+		} else {
+			options.Method = "GET"
+		}
+		log.Tracef("Computed HTTP method: %s", options.Method)
+	}
+
+	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reqContent.Reader())
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	// Close indicates to close the connection or after sending this request and reading its response.
+	// setting this field prevents re-use of TCP connections between requests to the same hosts, as if Transport.DisableKeepAlives were set.
+	req.Close = true
+
+	// Setting request headers
+	req.Header.Set("User-Agent", options.UserAgent)
+	req.Header.Set("Accept", options.Accept)
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Add("Accept-Encoding", "deflate")
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("X-Request-Id", options.RequestID)
+	if len(options.Authorization) > 0 {
+		req.Header.Set("Authorization", options.Authorization)
+	}
+	if len(reqContent.Type) > 0 {
+		req.Header.Set("Content-Type", reqContent.Type)
+	}
+	if reqContent.Length > 0 {
+		req.Header.Set("Content-Length", strconv.FormatUint(reqContent.Length, 10))
+	}
+	for key, value := range options.Headers {
+		req.Header.Set(key, value)
+	}
+
+	if len(options.Cookies) > 0 {
+		for _, cookie := range options.Cookies {
+			req.AddCookie(cookie)
+		}
+	}
+	return req, nil
 }
 
 func isRetryable(statusCode int, retryableStatusCodes []int) bool {

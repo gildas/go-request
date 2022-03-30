@@ -72,6 +72,17 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				if _, err := res.Write([]byte(fmt.Sprintf("%d", len(items)))); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
+			case "/bytes":
+				reqContent, err := request.ContentFromReader(req.Body, req.Header.Get("Content-Type"))
+				if err != nil {
+					log.Errorf("Failed to read request content", err)
+					core.RespondWithError(res, http.StatusBadRequest, err)
+					return
+				}
+				log.Infof("Request body: %s, %d bytes: \n%s", reqContent.Type, reqContent.Length, string(reqContent.Data))
+				if _, err := res.Write([]byte(fmt.Sprintf("%d", len(reqContent.Data)))); err != nil {
+					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
+				}
 			case "/item":
 				reqContent, err := request.ContentFromReader(req.Body, req.Header.Get("Content-Type"))
 				if err != nil {
