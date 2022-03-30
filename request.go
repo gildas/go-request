@@ -263,6 +263,13 @@ func normalizeOptions(options *Options, results interface{}) (err error) {
 		options.Transport.Proxy = http.ProxyURL(options.Proxy)
 	}
 	if options.Attempts > 1 {
+		if options.Payload != nil {
+			if _, ok := options.Payload.(io.Reader); ok {
+				if _, ok := options.Payload.(io.Seeker); !ok {
+					return errors.New("Payload must be an io.Seeker").(errors.Error).Wrap(errors.ArgumentInvalid.With("payload"))
+				}
+			}
+		}
 		if options.Attachment != nil {
 			if _, ok := options.Attachment.(io.Seeker); !ok {
 				return errors.New("Attachment must be an io.Seeker").(errors.Error).Wrap(errors.ArgumentInvalid.With("attachment"))
