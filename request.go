@@ -358,7 +358,9 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 			attributes := map[string]string{}
 			if stringMap, ok := options.Payload.(map[string]string); ok {
 				log.Tracef("Payload is a StringMap")
-				attributes = stringMap
+				for key, value := range stringMap {
+					attributes[key] = value
+				}
 			} else { // traverse the map, collecting values if they are Stringer. Note: This can be slow...
 				log.Tracef("Payload is a Map")
 				items := reflect.ValueOf(options.Payload)
