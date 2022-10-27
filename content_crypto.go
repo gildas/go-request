@@ -60,7 +60,7 @@ func (content Content) Decrypt(algorithm CryptoAlgorithm, key []byte) (*Content,
 func (content Content) DecryptWithAESCTR(key []byte) (*Content, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, errors.ArgumentInvalid.With("key", key).(errors.Error).Wrap(err)
+		return nil, errors.WrapErrors(errors.ArgumentInvalid.With("key", key), err)
 	}
 
 	decrypted := Content{
@@ -91,7 +91,7 @@ func (content Content) Encrypt(algorithm CryptoAlgorithm, key []byte) (*Content,
 func (content Content) EncryptWithAESCTR(key []byte) (*Content, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, errors.ArgumentInvalid.With("key", key).(errors.Error).Wrap(err)
+		return nil, errors.WrapErrors(errors.ArgumentInvalid.With("key", key), err)
 	}
 
 	encrypted := Content{

@@ -256,7 +256,7 @@ func normalizeOptions(options *Options, results interface{}) (err error) {
 		}
 		options.URL.RawQuery = query.Encode()
 	}
-	if options.Transport == nil  {
+	if options.Transport == nil {
 		options.Transport = http.DefaultTransport.(*http.Transport).Clone()
 	}
 	if options.Proxy != nil {
@@ -266,17 +266,16 @@ func normalizeOptions(options *Options, results interface{}) (err error) {
 		if options.Payload != nil {
 			if _, ok := options.Payload.(io.Reader); ok {
 				if _, ok := options.Payload.(io.Seeker); !ok {
-					return errors.New("Payload must be an io.Seeker").(errors.Error).Wrap(errors.ArgumentInvalid.With("payload"))
+					return errors.WrapErrors(errors.ArgumentInvalid.With("Payload", fmt.Sprintf("%T", options.Payload)), fmt.Errorf("Payload must be an io.Seeker if you want to retry the request"))
 				}
 			}
 		}
 		if options.Attachment != nil {
 			if _, ok := options.Attachment.(io.Seeker); !ok {
-				return errors.New("Attachment must be an io.Seeker").(errors.Error).Wrap(errors.ArgumentInvalid.With("attachment"))
+				return errors.WrapErrors(errors.ArgumentInvalid.With("Attachment", fmt.Sprintf("%T", options.Attachment)), fmt.Errorf("Attachment must be an io.Seeker if you want to retry the request"))
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -358,7 +357,9 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 			attributes := map[string]string{}
 			if stringMap, ok := options.Payload.(map[string]string); ok {
 				log.Tracef("Payload is a StringMap")
-				attributes = stringMap
+				for key, value := range stringMap {
+					attributes[key] = value
+				}
 			} else { // traverse the map, collecting values if they are Stringer. Note: This can be slow...
 				log.Tracef("Payload is a Map")
 				items := reflect.ValueOf(options.Payload)

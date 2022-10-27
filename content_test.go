@@ -42,7 +42,8 @@ func (suite *ContentSuite) SetupSuite() {
 		&logger.FileStream{
 			Path:        fmt.Sprintf("./log/test-%s.log", strings.ToLower(suite.Name)),
 			Unbuffered:  true,
-			FilterLevel: logger.TRACE,
+			SourceInfo:   true,
+			FilterLevels: logger.NewLevelSet(logger.TRACE),
 		},
 	).Child("test", "test")
 	suite.Logger.Infof("Suite Start: %s %s", suite.Name, strings.Repeat("=", 80-14-len(suite.Name)))
@@ -537,8 +538,8 @@ func (suite *ContentSuite) TestShouldFailDecryptWithInvalidKey() {
 	suite.Assert().Equal("key", details.What)
 	suite.Assert().Equal(key, details.Value.([]byte))
 	suite.Assert().ErrorIs(err, aes.KeySizeError(len(key)), "Error should be a KeySizeError")
-	suite.Require().NotNil(details.HasCauses(), "Error should have a cause")
-	suite.Assert().Equal("crypto/aes: invalid key size 5", details.Causes[0].Error())
+	suite.Require().NotNil(details.Unwrap(), "Error should have a cause")
+	suite.Assert().Equal("crypto/aes: invalid key size 5", details.Unwrap().Error())
 }
 
 func (suite *ContentSuite) TestShouldFailEncryptWithInvalidAlgorithm() {
@@ -562,6 +563,6 @@ func (suite *ContentSuite) TestShouldFailEncryptWithInvalidKey() {
 	suite.Assert().Equal("key", details.What)
 	suite.Assert().Equal(key, details.Value.([]byte))
 	suite.Assert().ErrorIs(err, aes.KeySizeError(len(key)), "Error should be a KeySizeError")
-	suite.Require().NotNil(details.HasCauses(), "Error should have a cause")
-	suite.Assert().Equal("crypto/aes: invalid key size 5", details.Causes[0].Error())
+	suite.Require().NotNil(details.Unwrap(), "Error should have a cause")
+	suite.Assert().Equal("crypto/aes: invalid key size 5", details.Unwrap().Error())
 }
