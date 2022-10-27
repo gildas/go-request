@@ -35,6 +35,59 @@ func TestRequestSuite(t *testing.T) {
 	suite.Run(t, new(RequestSuite))
 }
 
+// *****************************************************************************
+// Suite Tools
+
+func (suite *RequestSuite) SetupSuite() {
+	_ = godotenv.Load()
+	suite.Name = strings.TrimSuffix(reflect.TypeOf(*suite).Name(), "Suite")
+	suite.Logger = logger.Create("test",
+		&logger.FileStream{
+			Path:         fmt.Sprintf("./log/test-%s.log", strings.ToLower(suite.Name)),
+			Unbuffered:   true,
+			SourceInfo:   true,
+			FilterLevels: logger.NewLevelSet(logger.TRACE),
+		},
+	).Child("test", "test")
+	suite.Logger.Infof("Suite Start: %s %s", suite.Name, strings.Repeat("=", 80-14-len(suite.Name)))
+
+	err := os.MkdirAll("./tmp", 0755)
+	suite.Require().Nilf(err, "Failed creating tmp directory, err=%+v", err)
+
+	suite.Server = CreateTestServer(suite)
+	suite.Proxy = CreateTestProxy(suite)
+}
+
+func (suite *RequestSuite) TearDownSuite() {
+	suite.Logger.Debugf("Tearing down")
+	if suite.T().Failed() {
+		suite.Logger.Warnf("At least one test failed, we are not cleaning")
+		suite.T().Log("At least one test failed, we are not cleaning")
+	} else {
+		suite.Logger.Infof("All tests succeeded, we are cleaning")
+	}
+	suite.Logger.Infof("Suite End: %s %s", suite.Name, strings.Repeat("=", 80-12-len(suite.Name)))
+
+	suite.Server.Close()
+	suite.Logger.Infof("Closed the Test WEB Server")
+	suite.Logger.Close()
+}
+
+func (suite *RequestSuite) BeforeTest(suiteName, testName string) {
+	suite.Logger.Infof("Test Start: %s %s", testName, strings.Repeat("-", 80-13-len(testName)))
+	suite.Start = time.Now()
+}
+
+func (suite *RequestSuite) AfterTest(suiteName, testName string) {
+	duration := time.Since(suite.Start)
+	if suite.T().Failed() {
+		suite.Logger.Errorf("Test %s failed", testName)
+	}
+	suite.Logger.Record("duration", duration.String()).Infof("Test End: %s %s", testName, strings.Repeat("-", 80-11-len(testName)))
+}
+
+// *****************************************************************************
+
 func (suite *RequestSuite) TestCheckTestServer() {
 	suite.Require().NotNil(suite.Server)
 	serverURL, err := url.Parse(suite.Server.URL)
@@ -381,11 +434,11 @@ func (suite *RequestSuite) TestCanSendRequestWithByteSlicePayload() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/bytes")
 	content, err := request.Send(&request.Options{
-		Method: http.MethodPost,
-		URL:    serverURL,
+		Method:      http.MethodPost,
+		URL:         serverURL,
 		PayloadType: "application/octet-stream",
-		Payload: []byte{1, 2, 3, 4},
-		Logger: suite.Logger,
+		Payload:     []byte{1, 2, 3, 4},
+		Logger:      suite.Logger,
 	}, nil)
 	suite.Require().NoError(err, "Failed sending request, err=%+v", err)
 	suite.Require().NotNil(content, "Content should not be nil")
@@ -396,8 +449,8 @@ func (suite *RequestSuite) TestCanSendRequestWithSlicePayloadAndNoReqLogSize() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/items")
 	content, err := request.Send(&request.Options{
-		Method: http.MethodDelete,
-		URL:    serverURL,
+		Method:      http.MethodDelete,
+		URL:         serverURL,
 		PayloadType: "application/json",
 		Payload: []struct{ ID string }{
 			{ID: "1234"},
@@ -653,15 +706,17 @@ func (suite *RequestSuite) TestCanRetryPostingRequest() {
 func (suite *RequestSuite) TestCanRetryPostingRequestWithAttachment() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/retry")
-	payload, _ := json.Marshal(struct {ID string `json:"id"`}{ID: "1234"})
+	payload, _ := json.Marshal(struct {
+		ID string `json:"id"`
+	}{ID: "1234"})
 	content := request.ContentWithData(payload, "application/json")
 	_, err := request.Send(&request.Options{
 		URL: serverURL,
-		Payload: map[string]string {
+		Payload: map[string]string{
 			"name":  "test",
 			">file": "test",
 		},
-		Attachment:  content.Reader(),
+		Attachment:           content.Reader(),
 		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
 		Attempts:             5,
 		Logger:               suite.Logger,
@@ -674,40 +729,42 @@ func (suite *RequestSuite) TestShouldFailPostingWithNonSeekerPayloadAndAttempts(
 	serverURL, _ := url.Parse(suite.Server.URL)
 	reader := failingReader(0) // This reader cannot seek
 	_, err := request.Send(&request.Options{
-		URL: serverURL,
-		Payload: reader,
+		URL:      serverURL,
+		Payload:  reader,
 		Attempts: 5,
-		Logger:  suite.Logger,
-	} , nil)
+		Logger:   suite.Logger,
+	}, nil)
 	suite.Require().Error(err, "Should fail with payload from non-seeker streams")
 	suite.Logger.Errorf("Expected Error", err)
 	suite.Assert().ErrorIs(err, errors.ArgumentInvalid, "Error should be ArgumentInvalid: %s", err)
 	suite.Assert().Contains(err.Error(), "Payload must be an io.Seeker")
 	details := errors.ArgumentInvalid.Clone()
 	suite.Require().ErrorAs(err, &details, "Error should be an ArgumentInvalid")
-	suite.Assert().Equal("payload", details.What)
+	suite.Assert().Equal("Payload", details.What)
+	suite.Assert().Equal("request_test.failingReader", details.Value.(string))
 }
 
 func (suite *RequestSuite) TestShouldFailPostingWithNonSeekerAttachmentAndAttempts() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	reader := failingReader(0) // This reader cannot seek
 	_, err := request.Send(&request.Options{
-		URL: serverURL,
+		URL:      serverURL,
 		Attempts: 5,
-		Payload: map[string]string {
+		Payload: map[string]string{
 			"name":  "test",
 			">file": "test",
 		},
-		Attachment:  reader,
-		Logger:  suite.Logger,
-	} , nil)
+		Attachment: reader,
+		Logger:     suite.Logger,
+	}, nil)
 	suite.Require().Error(err, "Should fail with attachment from non-seeker streams")
 	suite.Logger.Errorf("Expected Error", err)
 	suite.Assert().ErrorIs(err, errors.ArgumentInvalid, "Error should be ArgumentInvalid: %s", err)
 	suite.Assert().Contains(err.Error(), "Attachment must be an io.Seeker")
 	details := errors.ArgumentInvalid.Clone()
 	suite.Require().ErrorAs(err, &details, "Error should be an ArgumentInvalid")
-	suite.Assert().Equal("attachment", details.What)
+	suite.Assert().Equal("Attachment", details.What)
+	suite.Assert().Equal("request_test.failingReader", details.Value.(string))
 }
 
 func (suite *RequestSuite) TestShouldFailWithBadRedirectLocation() {
@@ -1001,53 +1058,4 @@ func (suite *RequestSuite) TestCanSendRequestWithWriterStream() {
 	suite.Require().NoError(err, "Failed sending request, err=%+v", err)
 	suite.Assert().Equal("application/octet-stream", content.Type)
 	suite.Assert().Equal(uint64(4), content.Length)
-}
-
-// Suite Tools
-
-func (suite *RequestSuite) SetupSuite() {
-	_ = godotenv.Load()
-	suite.Name = strings.TrimSuffix(reflect.TypeOf(*suite).Name(), "Suite")
-	suite.Logger = logger.Create("test",
-		&logger.FileStream{
-			Path:        fmt.Sprintf("./log/test-%s.log", strings.ToLower(suite.Name)),
-			Unbuffered:  true,
-			FilterLevel: logger.TRACE,
-		},
-	).Child("test", "test")
-	suite.Logger.Infof("Suite Start: %s %s", suite.Name, strings.Repeat("=", 80-14-len(suite.Name)))
-
-	err := os.MkdirAll("./tmp", 0755)
-	suite.Require().Nilf(err, "Failed creating tmp directory, err=%+v", err)
-
-	suite.Server = CreateTestServer(suite)
-	suite.Proxy = CreateTestProxy(suite)
-}
-
-func (suite *RequestSuite) TearDownSuite() {
-	suite.Logger.Debugf("Tearing down")
-	if suite.T().Failed() {
-		suite.Logger.Warnf("At least one test failed, we are not cleaning")
-		suite.T().Log("At least one test failed, we are not cleaning")
-	} else {
-		suite.Logger.Infof("All tests succeeded, we are cleaning")
-	}
-	suite.Logger.Infof("Suite End: %s %s", suite.Name, strings.Repeat("=", 80-12-len(suite.Name)))
-
-	suite.Server.Close()
-	suite.Logger.Infof("Closed the Test WEB Server")
-	suite.Logger.Close()
-}
-
-func (suite *RequestSuite) BeforeTest(suiteName, testName string) {
-	suite.Logger.Infof("Test Start: %s %s", testName, strings.Repeat("-", 80-13-len(testName)))
-	suite.Start = time.Now()
-}
-
-func (suite *RequestSuite) AfterTest(suiteName, testName string) {
-	duration := time.Since(suite.Start)
-	if suite.T().Failed() {
-		suite.Logger.Errorf("Test %s failed", testName)
-	}
-	suite.Logger.Record("duration", duration.String()).Infof("Test End: %s %s", testName, strings.Repeat("-", 80-11-len(testName)))
 }
