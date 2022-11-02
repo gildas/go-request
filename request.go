@@ -397,7 +397,6 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 						return nil, errors.Errorf("Empty value for multipart form field %s", key)
 					}
 					partHeader := textproto.MIMEHeader{}
-					partHeader.Add("Content-Disposition", fmt.Sprintf("form-data; name=\"%s\"; filename=\"%s\"", key, value))
 					if len(options.AttachmentType) > 0 {
 						partHeader.Add("Content-Type", options.AttachmentType)
 					}
@@ -416,6 +415,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 					if written == 0 {
 						return nil, errors.Errorf("Missing/Empty Attachment for multipart form field %s", key)
 					}
+					partHeader.Add("Content-Disposition", fmt.Sprintf("form-data; name=\"%s\"; filename=\"%s\"; filelength=%d", key, value, written))
 					log.Tracef("Wrote %d bytes to multipart form field %s", written, key)
 				} else {
 					if err := writer.WriteField(key, value); err != nil {
