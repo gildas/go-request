@@ -295,10 +295,6 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				res.Header().Add("X-Cache", "Miss form cloudfront")
 				res.WriteHeader(http.StatusSeeOther)
 				log.Infof("Redirecting to /Bo%%C3%%AEte.png")
-			case "/bad_redirect":
-				res.Header().Add("Location", "") // This is on purpose to check if the client handles this error well
-				res.WriteHeader(http.StatusFound)
-				log.Infof("Redirecting to /")
 			case "/results":
 				if _, err := res.Write([]byte(`{"code": 1234}`)); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
