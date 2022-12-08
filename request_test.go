@@ -767,20 +767,6 @@ func (suite *RequestSuite) TestShouldFailPostingWithNonSeekerAttachmentAndAttemp
 	suite.Assert().Equal("request_test.failingReader", details.Value.(string))
 }
 
-func (suite *RequestSuite) TestShouldFailWithBadRedirectLocation() {
-	serverURL, _ := url.Parse(suite.Server.URL)
-	serverURL, _ = serverURL.Parse("/bad_redirect")
-	_, err := request.Send(&request.Options{
-		URL:    serverURL,
-		Logger: suite.Logger,
-	}, nil)
-	suite.Require().Error(err, "Should have failed sending request")
-	suite.Logger.Errorf("Expected Error", err)
-	var details *url.Error
-	suite.Require().True(errors.As(err, &details), "Error chain should contain an URL Error")
-	suite.Assert().Contains(details.Error(), "response missing Location header")
-}
-
 func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd1Attempt() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/timeout")
