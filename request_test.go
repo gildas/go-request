@@ -398,6 +398,21 @@ func (suite *RequestSuite) TestCanSendRequestWithMapPayload() {
 	suite.Assert().Equal("1", string(content.Data))
 }
 
+func (suite *RequestSuite) TestCanSendRequestWithMapPayloadAsJSON() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/item")
+	content, err := request.Send(&request.Options{
+		URL:                serverURL,
+		PayloadType:        "application/json",
+		Payload:            map[string]string{"ID": "1234"},
+		RequestBodyLogSize: -1,
+		Logger:             suite.Logger,
+	}, nil)
+	suite.Require().NoError(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1234", string(content.Data))
+}
+
 func (suite *RequestSuite) TestCanSendRequestWithStringMapPayloadAndAttachment() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/image")
