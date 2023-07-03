@@ -1,6 +1,6 @@
 module github.com/gildas/go-request
 
-go 1.18
+go 1.20
 
 require (
 	github.com/gildas/go-core v0.5.2
