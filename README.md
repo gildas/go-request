@@ -1,8 +1,8 @@
 # go-request
 
 ![GoVersion](https://img.shields.io/github/go-mod/go-version/gildas/go-request)
-[![GoDoc](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/gildas/go-request) 
-[![License](https://img.shields.io/github/license/gildas/go-request)](https://github.com/gildas/go-request/blob/master/LICENSE) 
+[![GoDoc](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/gildas/go-request)
+[![License](https://img.shields.io/github/license/gildas/go-request)](https://github.com/gildas/go-request/blob/master/LICENSE)
 [![Report](https://goreportcard.com/badge/github.com/gildas/go-request)](https://goreportcard.com/report/github.com/gildas/go-request)  
 
 ![master](https://img.shields.io/badge/branch-master-informational)
@@ -31,6 +31,7 @@ if err != nil {
 data := struct{Data string}{}
 err := res.UnmarshalContentJSON(&data)
 ```
+
 Here we send an HTTP GET request and unmarshal the response.
 
 It is also possible to let `request.Send` do the unmarshal for us:
@@ -41,17 +42,20 @@ _, err := request.Send(&request.Options{
     URL: myURL,
 }, &data)
 ```
+
 In that case, the returned `Content`'s data is an empty byte array. Its other properties are valid (like the size, mime type, etc)
 
 You can also download data directly to an `io.Writer`:
+
 ```go
 writer, err := os.Create(filepath.Join("tmp", "data"))
 defer writer.Close()
 res, err := request.Send(&request.Options{
-	URL:    serverURL,
+  URL: serverURL,
 }, writer)
 log.Infof("Downloaded %d bytes", res.Length)
 ```
+
 In that case, the returned `Content`'s data is an empty byte array. Its other properties are valid (like the size, mime type, etc)
 
 Authorization can be stored in the `Options.Authorization`:
@@ -125,7 +129,9 @@ res, err := request.Send(&request.Options{
     Attachment: attachment,
 }, nil)
 ```
+
 To send the request again when receiving a Service Unavailable (`Attempts` and `Timeout` are optional):  
+
 ```go
 res, err := request.Send(&request.Options{
     URL:                  myURL,
@@ -136,6 +142,7 @@ res, err := request.Send(&request.Options{
 ```
 
 **Notes:**  
+
 - if the PayloadType is not mentioned, it is calculated when processing the Payload.
 - if the payload is a `ContentReader` or a `Content`, it is used directly.
 - if the payload is a `map[string]xxx` where *xxx* is not `string`, the `fmt.Stringer` is used whenever possible to get the string version of the values.
@@ -146,6 +153,7 @@ res, err := request.Send(&request.Options{
 - `Send()` makes 5 attempts by default to reach the given URL. If option `RetryableStatusCodes` is given, it will attempt the request again when it receives an HTTP Status Code in the given list.
 - The default timeout for `Send()` is 1 second.
 
-**TODO**  
+**TODO:**  
+
 - Support other kinds of `map` in the payload, like `map[string]int`, etc.
 - Maybe have an interface for the Payload to allow users to provide the logic of building the payload themselves. (`type PayloadBuilder interface { BuildPayload() *ContentReader}`?!?)
