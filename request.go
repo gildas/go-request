@@ -42,7 +42,7 @@ type Options struct {
 	RequestID            string
 	UserAgent            string
 	Transport            *http.Transport
-	RetryableStatusCodes []int
+	RetryableStatusCodes []int // Status codes that should be retried, by default: 429, 502, 503, 504
 	Attempts             int
 	InterAttemptDelay    time.Duration
 	Timeout              time.Duration
@@ -248,6 +248,9 @@ func normalizeOptions(options *Options, results interface{}) (err error) {
 	}
 	if options.InterAttemptDelay < 1*time.Second {
 		options.InterAttemptDelay = time.Duration(DefaultInterAttemptDelay)
+	}
+	if len(options.RetryableStatusCodes) == 0 {
+		options.RetryableStatusCodes = []int{http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout}
 	}
 	if options.Parameters != nil {
 		query := options.URL.Query()
