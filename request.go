@@ -44,7 +44,7 @@ type Options struct {
 	Transport            *http.Transport
 	RetryableStatusCodes []int // Status codes that should be retried, by default: 429, 502, 503, 504
 	Attempts             int
-	InterAttemptDelay    time.Duration
+	InterAttemptDelay    time.Duration // how long to wait between 2 attempts, by default: 5s
 	Timeout              time.Duration
 	RequestBodyLogSize   int // how many characters of the request body should be logged, if possible (<0 => nothing logged)
 	ResponseBodyLogSize  int // how many characters of the response body should be logged (<0 => nothing logged)
@@ -129,9 +129,10 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		if res.StatusCode >= 400 {
 			if core.Contains(options.RetryableStatusCodes, res.StatusCode) {
 				if attempt+1 < options.Attempts {
+					retryAfter := time.Duration(core.Atoi(res.Header.Get("Retry-After"), int(options.InterAttemptDelay.Seconds()))) * time.Second
 					log.Warnf("Retryable Response Status: %s", res.Status)
-					log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
-					time.Sleep(options.InterAttemptDelay)
+					log.Infof("Waiting for %s before trying again", retryAfter)
+					time.Sleep(retryAfter)
 					req, _ = buildRequest(log, options)
 					continue
 				}
