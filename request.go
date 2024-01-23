@@ -127,7 +127,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 
 		// Processing the status
 		if res.StatusCode >= 400 {
-			if isRetryable(res.StatusCode, options.RetryableStatusCodes) {
+			if core.Contains(options.RetryableStatusCodes, res.StatusCode) {
 				if attempt+1 < options.Attempts {
 					log.Warnf("Retryable Response Status: %s", res.Status)
 					log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
@@ -497,15 +497,6 @@ func buildRequest(log *logger.Logger, options *Options) (*http.Request, error) {
 		}
 	}
 	return req, nil
-}
-
-func isRetryable(statusCode int, retryableStatusCodes []int) bool {
-	for _, retryable := range retryableStatusCodes {
-		if statusCode == retryable {
-			return true
-		}
-	}
-	return false
 }
 
 func marshal(payload interface{}) ([]byte, error) {
