@@ -184,9 +184,11 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
 			case "/retry":
-				attempt := req.Header.Get("X-Attempt")
-				if attempt != "5" { // On the 5th attempt, we want to return 200
-					res.WriteHeader(http.StatusServiceUnavailable)
+				max := core.Atoi(req.Header.Get("X-Max-Retry"), 5)
+				attempt := core.Atoi(req.Header.Get("X-Attempt"), 0)
+				if attempt < max { // On the max-th attempt, we want to return 200
+					returnStatus := core.Atoi(req.Header.Get("X-Return-Status"), http.StatusServiceUnavailable)
+					res.WriteHeader(returnStatus)
 					return
 				}
 			case "/timeout":
@@ -274,9 +276,21 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
 			case "/retry":
-				attempt := req.Header.Get("X-Attempt")
-				if attempt != "5" { // On the 5th attempt, we want to return 200
-					res.WriteHeader(http.StatusServiceUnavailable)
+				max := core.Atoi(req.Header.Get("X-Max-Retry"), 5)
+				attempt := core.Atoi(req.Header.Get("X-Attempt"), 0)
+				if attempt < max { // On the max-th attempt, we want to return 200
+					returnStatus := core.Atoi(req.Header.Get("X-Return-Status"), http.StatusServiceUnavailable)
+					res.WriteHeader(returnStatus)
+					return
+				}
+			case "/retry-after":
+				max := core.Atoi(req.Header.Get("X-Max-Retry"), 5)
+				attempt := core.Atoi(req.Header.Get("X-Attempt"), 0)
+				if attempt < max { // On the max-th attempt, we want to return 200
+					retryAfter := core.Atoi(req.Header.Get("X-Retry-After"), 5)
+					res.Header().Add("Retry-After", strconv.Itoa(retryAfter))
+					returnStatus := core.Atoi(req.Header.Get("X-Return-Status"), http.StatusServiceUnavailable)
+					res.WriteHeader(returnStatus)
 					return
 				}
 			case "/redirect":

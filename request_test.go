@@ -696,10 +696,70 @@ func (suite *RequestSuite) TestCanRetryReceivingRequest() {
 		URL:                  serverURL,
 		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
 		Attempts:             5,
-		Logger:               suite.Logger,
 		Timeout:              1 * time.Second,
+		Logger:               suite.Logger,
 	}, nil)
 	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
+}
+
+func (suite *RequestSuite) TestCanRetryReceivingRequestWithExponentialBackoff() {
+	start := time.Now()
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/retry")
+	_, err := request.Send(&request.Options{
+		URL: serverURL,
+		Headers: map[string]string{ // configure the test server
+			"X-Max-Retry": "5", // So 5 attempts will succeed, roughly 10 seconds
+			// [(t, interval, result)...] = [(0s, 1, ✘), (2s, 1, ✘), (4s, 1, ✘), (6s, 2, ✘), (10s, 2, ✔)]
+		},
+		InterAttemptDelay:           2 * time.Second,
+		InterAttemptBackoffInterval: 5 * time.Second,
+		Logger:                      suite.Logger,
+	}, nil)
+	duration := time.Since(start)
+	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
+	suite.Assert().GreaterOrEqual(int64(duration), int64(10*time.Second), "The request lasted less than 10 second (%s)", duration)
+	suite.Assert().Less(int64(duration), int64(12*time.Second), "The request lasted more than 12 second (%s)", duration)
+}
+
+func (suite *RequestSuite) TestCanRetryReceivingRequestWithLinearBackoff() {
+	start := time.Now()
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/retry")
+	_, err := request.Send(&request.Options{
+		URL: serverURL,
+		Headers: map[string]string{ // configure the test server
+			"X-Max-Retry": "5", // So 5 attempts will succeed, roughly 4 seconds
+			// [(t, interval, result)...] = [(0s, 1, ✘), (1s, 2, ✘), (2s, 3, ✘), (3s, 4, ✘), (4s, 5, ✔)]
+		},
+		InterAttemptDelay:           1 * time.Second,
+		InterAttemptBackoffInterval: 1 * time.Second,
+		Logger:                      suite.Logger,
+	}, nil)
+	duration := time.Since(start)
+	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
+	suite.Assert().GreaterOrEqual(int64(duration), int64(4*time.Second), "The request lasted less than 4 second (%s)", duration)
+	suite.Assert().Less(int64(duration), int64(5*time.Second), "The request lasted more than 5 second (%s)", duration)
+}
+
+func (suite *RequestSuite) TestCanRetryReceivingRequestWithRetryAfter() {
+	start := time.Now()
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/retry-after")
+	_, err := request.Send(&request.Options{
+		URL: serverURL,
+		Headers: map[string]string{ // configure the test server
+			"X-Retry-After": "2", // the server will request a retry after 2 seconds
+			"X-Max-Retry":   "3", // So 3 attempts will succeed, roughly 4 seconds
+			// [(t, interval, result)...] = [(0s, ✘), (2s, ✘), (4s, 3, ✔)]
+		},
+		InterAttemptUseRetryAfter: true,
+		Logger:                    suite.Logger,
+	}, nil)
+	duration := time.Since(start)
+	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
+	suite.Assert().GreaterOrEqual(int64(duration), int64(4*time.Second), "The request lasted less than 4 second (%s)", duration)
+	suite.Assert().Less(int64(duration), int64(5*time.Second), "The request lasted more than 5 second (%s)", duration)
 }
 
 func (suite *RequestSuite) TestCanRetryPostingRequest() {
@@ -712,8 +772,8 @@ func (suite *RequestSuite) TestCanRetryPostingRequest() {
 		}{ID: "1234"},
 		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
 		Attempts:             5,
-		Logger:               suite.Logger,
 		Timeout:              1 * time.Second,
+		Logger:               suite.Logger,
 	}, nil)
 	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
 }
@@ -804,10 +864,11 @@ func (suite *RequestSuite) TestShouldFailReceivingWhenTimeoutAnd2Attempts() {
 	serverURL, _ = serverURL.Parse("/timeout")
 	start := time.Now()
 	_, err := request.Send(&request.Options{
-		URL:      serverURL,
-		Attempts: 2,
-		Logger:   suite.Logger,
-		Timeout:  1 * time.Second,
+		URL:               serverURL,
+		Attempts:          2,
+		InterAttemptDelay: 1 * time.Second,
+		Timeout:           1 * time.Second,
+		Logger:            suite.Logger,
 	}, nil)
 	end := time.Since(start)
 	suite.Require().Error(err, "Should have failed sending request")
@@ -825,9 +886,10 @@ func (suite *RequestSuite) TestShouldFailPostingWhenTimeoutAnd1Attempt() {
 		Payload: struct {
 			ID string `json:"id"`
 		}{ID: "1"},
-		Attempts: 1,
-		Logger:   suite.Logger,
-		Timeout:  1 * time.Second,
+		Attempts:          1,
+		InterAttemptDelay: 1 * time.Second,
+		Timeout:           1 * time.Second,
+		Logger:            suite.Logger,
 	}, nil)
 	end := time.Since(start)
 	suite.Require().Error(err, "Should have failed sending request")
@@ -845,9 +907,10 @@ func (suite *RequestSuite) TestShouldFailPostingWhenTimeoutAnd2Attempts() {
 		Payload: struct {
 			ID string `json:"id"`
 		}{ID: "1"},
-		Attempts: 2,
-		Logger:   suite.Logger,
-		Timeout:  1 * time.Second,
+		Attempts:          2,
+		InterAttemptDelay: 1 * time.Second,
+		Timeout:           1 * time.Second,
+		Logger:            suite.Logger,
 	}, nil)
 	end := time.Since(start)
 	suite.Require().Error(err, "Should have failed sending request")

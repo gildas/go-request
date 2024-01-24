@@ -26,29 +26,31 @@ import (
 
 // Options defines options of an HTTP request
 type Options struct {
-	Context              context.Context
-	Method               string
-	URL                  *url.URL
-	Proxy                *url.URL
-	Headers              map[string]string
-	Cookies              []*http.Cookie
-	Parameters           map[string]string
-	Accept               string
-	PayloadType          string // if not provided, it is computed. payload==struct => json, payload==map => form
-	Payload              interface{}
-	AttachmentType       string
-	Attachment           io.Reader // binary data that should be attached to the paylod (e.g.: multipart forms)
-	Authorization        string
-	RequestID            string
-	UserAgent            string
-	Transport            *http.Transport
-	RetryableStatusCodes []int
-	Attempts             int
-	InterAttemptDelay    time.Duration
-	Timeout              time.Duration
-	RequestBodyLogSize   int // how many characters of the request body should be logged, if possible (<0 => nothing logged)
-	ResponseBodyLogSize  int // how many characters of the response body should be logged (<0 => nothing logged)
-	Logger               *logger.Logger
+	Context                     context.Context
+	Method                      string
+	URL                         *url.URL
+	Proxy                       *url.URL
+	Headers                     map[string]string
+	Cookies                     []*http.Cookie
+	Parameters                  map[string]string
+	Accept                      string
+	PayloadType                 string      // if not provided, it is computed. See https://gihub.com/gildas/go-request#payload
+	Payload                     interface{} // See https://gihub.com/gildas/go-request#payload
+	AttachmentType              string      // MIME type of the attachment
+	Attachment                  io.Reader   // binary data that should be attached to the paylod (e.g.: multipart forms)
+	Authorization               string
+	RequestID                   string
+	UserAgent                   string
+	Transport                   *http.Transport
+	RetryableStatusCodes        []int         // Status codes that should be retried, by default: 429, 502, 503, 504
+	Attempts                    uint          // number of attempts, by default: 5
+	InterAttemptDelay           time.Duration // how long to wait between 2 attempts during the first backoff interval, by default: 3s
+	InterAttemptBackoffInterval time.Duration // how often the inter attempt delay should be increased, by default: 5 minutes
+	InterAttemptUseRetryAfter   bool          // if true, the Retry-After header will be used to wait between 2 attempts, otherwise an exponential backoff will be used, by default: false
+	Timeout                     time.Duration
+	RequestBodyLogSize          int // how many characters of the request body should be logged, if possible (<0 => nothing logged)
+	ResponseBodyLogSize         int // how many characters of the response body should be logged (<0 => nothing logged)
+	Logger                      *logger.Logger
 }
 
 // DefaultAttempts defines the number of attempts for requests by default
@@ -57,8 +59,11 @@ const DefaultAttempts = 5
 // DefaultTimeout defines the timeout for a request
 const DefaultTimeout = 2 * time.Second
 
-// DefaultInterAttemptDelay defines the sleep delay between 2 attempts
-const DefaultInterAttemptDelay = 1 * time.Second
+// DefaultInterAttemptDelay defines the sleep delay between 2 attempts during the first backoff interval
+const DefaultInterAttemptDelay = 3 * time.Second
+
+// DefaultInterAttemptBackoffInterval defines the interval between 2 inter attempt delay increases
+const DefaultInterAttemptBackoffInterval = 5 * time.Minute
 
 // DefaultRequestBodyLogSize  defines the maximum size of the request body that should be logged
 const DefaultRequestBodyLogSize = 2048
@@ -94,20 +99,21 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		Timeout: options.Timeout,
 	}
 	// Sending the request...
-	for attempt := 0; attempt < options.Attempts; attempt++ {
+	start := time.Now()
+	for attempt := uint(0); attempt < options.Attempts; attempt++ {
 		log.Tracef("Attempt #%d/%d", attempt+1, options.Attempts)
-		req.Header.Set("X-Attempt", strconv.Itoa(attempt+1))
+		req.Header.Set("X-Attempt", strconv.FormatUint(uint64(attempt+1), 10))
 		log.Tracef("Request Headers: %#v", req.Header)
-		start := time.Now()
+		reqStart := time.Now()
 		res, err := httpclient.Do(req)
-		duration := time.Since(start)
-		log = log.Record("duration", duration/time.Millisecond)
+		reqDuration := time.Since(reqStart)
+		log = log.Record("duration", reqDuration/time.Millisecond)
 		if err != nil {
 			urlErr := &url.Error{}
 			if errors.As(err, &urlErr) {
 				if urlErr.Timeout() || urlErr.Temporary() || urlErr.Unwrap() == io.EOF || errors.Is(err, context.DeadlineExceeded) {
 					if attempt+1 < options.Attempts {
-						log.Warnf("Temporary failed to send request (duration: %s/%s), Error: %s", duration, options.Timeout, err.Error()) // we don't want the stack here
+						log.Warnf("Temporary failed to send request (duration: %s/%s), Error: %s", reqDuration, options.Timeout, err.Error()) // we don't want the stack here
 						log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
 						time.Sleep(options.InterAttemptDelay)
 						req, _ = buildRequest(log, options)
@@ -122,16 +128,26 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			return nil, err
 		}
 		defer res.Body.Close()
-		log.Debugf("Response %s in %s", res.Status, duration)
+		log.Debugf("Response %s in %s", res.Status, reqDuration)
 		log.Tracef("Response Headers: %#v", res.Header)
 
 		// Processing the status
 		if res.StatusCode >= 400 {
-			if isRetryable(res.StatusCode, options.RetryableStatusCodes) {
+			if core.Contains(options.RetryableStatusCodes, res.StatusCode) {
 				if attempt+1 < options.Attempts {
+					var retryAfter time.Duration
+
 					log.Warnf("Retryable Response Status: %s", res.Status)
-					log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
-					time.Sleep(options.InterAttemptDelay)
+					if options.InterAttemptUseRetryAfter && len(res.Header.Get("Retry-After")) > 0 {
+						retryAfter = time.Duration(core.Atoi(res.Header.Get("Retry-After"), 0)) * time.Second
+					} else {
+						elapsed := time.Since(start)
+						interval := int(elapsed/options.InterAttemptBackoffInterval) + 1
+						retryAfter = time.Duration(math.Pow(options.InterAttemptDelay.Seconds(), float64(interval))) * time.Second
+						log.Debugf("Interval: %d, delay: %s, Exponential Backoff: %s", interval, options.InterAttemptDelay, retryAfter)
+					}
+					log.Infof("Waiting for %s before trying again", retryAfter)
+					time.Sleep(retryAfter)
 					req, _ = buildRequest(log, options)
 					continue
 				}
@@ -141,7 +157,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			if err != nil {
 				return nil, errors.FromHTTPStatusCode(res.StatusCode)
 			}
-			log.Tracef("Response body: %s", resContent.LogString(uint64(options.ResponseBodyLogSize)))
+			log.Tracef("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			return resContent, errors.FromHTTPStatusCode(res.StatusCode)
 		}
 
@@ -179,7 +195,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
-			log.Tracef("Response body: %s", resContent.LogString(uint64(options.ResponseBodyLogSize)))
+			log.Tracef("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			err = json.Unmarshal(resContent.Data, results)
 			if err != nil {
 				log.Debugf("Failed to unmarshal response body, use the Content, JSON Error: %s", err)
@@ -193,12 +209,12 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
 			return nil, err                                           // err is already "decorated" by ContentReader
 		}
-		log.Tracef("Response body: %s", resContent.LogString(uint64(options.ResponseBodyLogSize)))
+		log.Tracef("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
 
 		return resContent, nil
 	}
 	// If we get here, there is an error
-	return nil, errors.Wrapf(errors.HTTPStatusRequestTimeout, "Giving up after %d attempts", options.Attempts)
+	return nil, errors.Wrapf(errors.HTTPStatusRequestTimeout, "Giving up after %d attempts (%s)", options.Attempts, time.Since(start))
 }
 
 func normalizeOptions(options *Options, results interface{}) (err error) {
@@ -248,6 +264,12 @@ func normalizeOptions(options *Options, results interface{}) (err error) {
 	}
 	if options.InterAttemptDelay < 1*time.Second {
 		options.InterAttemptDelay = time.Duration(DefaultInterAttemptDelay)
+	}
+	if options.InterAttemptBackoffInterval < 1*time.Second {
+		options.InterAttemptBackoffInterval = time.Duration(DefaultInterAttemptBackoffInterval)
+	}
+	if len(options.RetryableStatusCodes) == 0 {
+		options.RetryableStatusCodes = []int{http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout}
 	}
 	if options.Parameters != nil {
 		query := options.URL.Query()
@@ -497,15 +519,6 @@ func buildRequest(log *logger.Logger, options *Options) (*http.Request, error) {
 		}
 	}
 	return req, nil
-}
-
-func isRetryable(statusCode int, retryableStatusCodes []int) bool {
-	for _, retryable := range retryableStatusCodes {
-		if statusCode == retryable {
-			return true
-		}
-	}
-	return false
 }
 
 func marshal(payload interface{}) ([]byte, error) {

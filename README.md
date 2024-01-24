@@ -141,6 +141,28 @@ res, err := request.Send(&request.Options{
 }, nil)
 ```
 
+By default, upon receiving a retryable status code, `Send` will use am exponential backoff algorithm to retry the request. By default, it will wait for 3 seconds before retrying for 5 minutes, then 9 seconds between 5 and 10 minutes, then 27 seconds between 10 and 15 minutes, etc.
+
+You can change the delay and the backoff factor like this:
+
+```go
+res, err := request.Send(&request.Options{
+    URL:                         myURL,
+    InterAttemptDelay:           5 * time.Second,
+    InterAttemptBackoffInterval: 2 * time.Minute,
+}, nil)
+```
+
+You can also not use the backoff algorithm and use the `Retry-After` header instead:
+
+```go
+res, err := request.Send(&request.Options{
+    URL:                       myURL,
+    // ...
+    InterAttemptUseRetryAfter: true,
+}, nil)
+```
+
 **Notes:**  
 
 - if the PayloadType is not mentioned, it is calculated when processing the Payload.
@@ -150,7 +172,7 @@ res, err := request.Send(&request.Options{
 - if the payload is an array or a slice, the body is sent as `application/json` and marshaled.
 - The option `Logger` can be used to let the `request` library log to a `gildas/go-logger`. By default, it logs to a `NilStream` (see github.com/gildas/go-logger).
 - When using a logger, you can control how much of the Request/Response Body is logged with the options `RequestBodyLogSize`/`ResponseBodyLogSize`. By default they are set to 2048 bytes. If you do not want to log them, set the options to *-1*.
-- `Send()` makes 5 attempts by default to reach the given URL. If option `RetryableStatusCodes` is given, it will attempt the request again when it receives an HTTP Status Code in the given list.
+- `Send()` makes 5 attempts by default to reach the given URL. If option `RetryableStatusCodes` is given, it will attempt the request again when it receives an HTTP Status Code in the given list. If it is not given, the default list is `[]int{http.StatusServiceUnavailable, http.StatusGatewayTimeout, http.StatusBadGateway, http.StatusRequestTimeout, http.StatusTooManyRequests}`.
 - The default timeout for `Send()` is 1 second.
 
 **TODO:**  
