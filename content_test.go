@@ -37,7 +37,7 @@ func TestContentSuite(t *testing.T) {
 
 func (suite *ContentSuite) SetupSuite() {
 	_ = godotenv.Load()
-	suite.Name = strings.TrimSuffix(reflect.TypeOf(*suite).Name(), "Suite")
+	suite.Name = strings.TrimSuffix(reflect.TypeOf(suite).Elem().Name(), "Suite")
 	suite.Logger = logger.Create("test",
 		&logger.FileStream{
 			Path:         fmt.Sprintf("./log/test-%s.log", strings.ToLower(suite.Name)),
