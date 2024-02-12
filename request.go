@@ -42,6 +42,8 @@ type Options struct {
 	RequestID                   string
 	UserAgent                   string
 	Transport                   *http.Transport
+	ProgressWriter              io.Writer // if not nil, the progress of the request will be written to this writer
+	ProgressSetMaxFunc          func(int64)
 	RetryableStatusCodes        []int         // Status codes that should be retried, by default: 429, 502, 503, 504
 	Attempts                    uint          // number of attempts, by default: 5
 	InterAttemptDelay           time.Duration // how long to wait between 2 attempts during the first backoff interval, by default: 3s
@@ -79,6 +81,12 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		return nil, err
 	}
 	log := options.Logger.Child(nil, "request", "reqid", options.RequestID, "method", options.Method)
+
+	if progressCloser, ok := options.ProgressWriter.(io.Closer); ok {
+		defer func() {
+			progressCloser.Close()
+		}()
+	}
 
 	log.Debugf("HTTP %s %s", options.Method, options.URL.String())
 	req, err := buildRequest(log, options)
@@ -183,6 +191,22 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		// Reading the response body
 
 		if writer, ok := results.(io.Writer); ok {
+			if options.ProgressWriter != nil {
+				if options.ProgressSetMaxFunc != nil {
+					if size, err := strconv.ParseInt(res.Header.Get("Content-Length"), 10, 64); err == nil {
+						options.ProgressSetMaxFunc(size)
+					}
+				} else if maxSetter, ok := options.ProgressWriter.(ProgressBarMaxSetter); ok {
+					if size, err := strconv.ParseInt(res.Header.Get("Content-Length"), 10, 64); err == nil {
+						maxSetter.SetMax64(size)
+					}
+				} else if maxChanger, ok := options.ProgressWriter.(ProgressBarMaxChanger); ok {
+					if size, err := strconv.ParseInt(res.Header.Get("Content-Length"), 10, 64); err == nil {
+						maxChanger.ChangeMax64(size)
+					}
+				}
+				writer = io.MultiWriter(writer, options.ProgressWriter)
+			}
 			bytesRead, err := io.Copy(writer, res.Body)
 			if err != nil {
 				return nil, errors.WithStack(err)
@@ -430,9 +454,12 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 						if err != nil {
 							return nil, errors.Wrapf(err, "Failed to create multipart for field %s", key)
 						}
-						_, err = options.Attachment.(io.Seeker).Seek(0, io.SeekStart)
-						if err != nil {
-							return nil, errors.Wrapf(err, "Failed to seek to beginning of attachment for field %s", key)
+						// if options.Attempts == 1, we don't need to seek to the beginning of the attachment
+						if options.Attempts > 1 {
+							_, err = options.Attachment.(io.Seeker).Seek(0, io.SeekStart)
+							if err != nil {
+								return nil, errors.Wrapf(err, "Failed to seek to beginning of attachment for field %s", key)
+							}
 						}
 						written, err := io.Copy(part, options.Attachment)
 						if err != nil {
@@ -484,7 +511,16 @@ func buildRequest(log *logger.Logger, options *Options) (*http.Request, error) {
 		log.Tracef("Computed HTTP method: %s", options.Method)
 	}
 
-	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reqContent.Reader())
+	reader := reqContent.Reader()
+
+	if options.ProgressWriter != nil {
+		reader = &progressReader{
+			Reader:   reqContent.Reader(),
+			Progress: options.ProgressWriter,
+		}
+	}
+
+	req, err := http.NewRequestWithContext(options.Context, options.Method, options.URL.String(), reader)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
