@@ -65,7 +65,6 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 						item := stuff{id}
 						log.Infof("Adding %#+v", item)
 						items = append(items, item)
-
 					}
 				}
 

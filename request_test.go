@@ -1123,3 +1123,82 @@ func (suite *RequestSuite) TestCanSendRequestWithWriterStream() {
 	suite.Assert().Equal("application/octet-stream", content.Type)
 	suite.Assert().Equal(uint64(4), content.Length)
 }
+
+func (suite *RequestSuite) TestCandSendRequestWithUploadDataAndProgress() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/image")
+	bar := &progressWriter{}
+	content, err := request.Send(&request.Options{
+		URL:            serverURL,
+		Payload:        map[string]string{"ID": "1234", ">file": "image.png"},
+		AttachmentType: "image/png",
+		Attachment:     bytes.NewReader(smallPNG()),
+		ProgressWriter: bar,
+		Logger:         suite.Logger,
+	}, nil)
+	suite.Require().NoError(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal("1", string(content.Data))
+	suite.Assert().Equal(int64(408), bar.Total)
+}
+
+func (suite *RequestSuite) TestCandSendRequestWithDownloadDataAndProgress() {
+	writer := new(bytes.Buffer)
+	suite.Logger.Memoryf("Before sending request")
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/binary_data")
+	bar := &progressWriter{}
+	content, err := request.Send(&request.Options{
+		URL:                serverURL,
+		ProgressWriter:     bar,
+		ProgressSetMaxFunc: func(max int64) { bar.Max = max },
+		Logger:             suite.Logger,
+	}, writer)
+	suite.Logger.Memoryf("After sending request")
+	suite.Require().NoError(err, "Failed sending request, err=%+v", err)
+	suite.Assert().Equal("application/octet-stream", content.Type)
+	suite.Assert().Equal(uint64(4), content.Length)
+	suite.Assert().Equal([]byte("body"), writer.Bytes())
+	suite.Assert().Equal(int64(4), bar.Total)
+	suite.Assert().Equal(int64(4), bar.Max)
+}
+
+func (suite *RequestSuite) TestCandSendRequestWithDownloadDataAndProgressMaxSetter() {
+	writer := new(bytes.Buffer)
+	suite.Logger.Memoryf("Before sending request")
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/binary_data")
+	bar := &progressWriter2{}
+	content, err := request.Send(&request.Options{
+		URL:            serverURL,
+		ProgressWriter: bar,
+		Logger:         suite.Logger,
+	}, writer)
+	suite.Logger.Memoryf("After sending request")
+	suite.Require().NoError(err, "Failed sending request, err=%+v", err)
+	suite.Assert().Equal("application/octet-stream", content.Type)
+	suite.Assert().Equal(uint64(4), content.Length)
+	suite.Assert().Equal([]byte("body"), writer.Bytes())
+	suite.Assert().Equal(int64(4), bar.Total)
+	suite.Assert().Equal(int64(4), bar.Max)
+}
+
+func (suite *RequestSuite) TestCandSendRequestWithDownloadDataAndProgressMaxChanger() {
+	writer := new(bytes.Buffer)
+	suite.Logger.Memoryf("Before sending request")
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/binary_data")
+	bar := &progressWriter3{}
+	content, err := request.Send(&request.Options{
+		URL:            serverURL,
+		ProgressWriter: bar,
+		Logger:         suite.Logger,
+	}, writer)
+	suite.Logger.Memoryf("After sending request")
+	suite.Require().NoError(err, "Failed sending request, err=%+v", err)
+	suite.Assert().Equal("application/octet-stream", content.Type)
+	suite.Assert().Equal(uint64(4), content.Length)
+	suite.Assert().Equal([]byte("body"), writer.Bytes())
+	suite.Assert().Equal(int64(4), bar.Total)
+	suite.Assert().Equal(int64(4), bar.Max)
+}

@@ -130,6 +130,8 @@ res, err := request.Send(&request.Options{
 }, nil)
 ```
 
+The file name and its key will be written in the `multipart/form-data`'s `Content-Disposition` header as: `form-data; name="file"; filename="image.png"`.
+
 To send the request again when receiving a Service Unavailable (`Attempts` and `Timeout` are optional):  
 
 ```go
@@ -161,6 +163,68 @@ res, err := request.Send(&request.Options{
     // ...
     InterAttemptUseRetryAfter: true,
 }, nil)
+```
+
+When sending requests to upload data streams, you can provide an `io.Writer` to write the progress to:
+
+```go
+import "github.com/schollz/progressbar/v3"
+
+reader, err := os.Open(pathToFile)
+defer reader.Close()
+stat, err := reader.Stat()
+bar := progressbar.DefaultBytes(stat.Size(), "Uploading")
+res, err := request.Send(&request.Options{
+  Method:         http.MethodPost,
+  URL:            serverURL,
+  Payload:        reader,
+  ProgressWriter: bar,
+}, reader)
+```
+
+If the progress `io.Writer` is also an `io.Closer`, it will be closed at the end of the `request.Send()`.
+
+When sending requests to download data streams, you can provide an `io.Writer` to write the progress to:
+
+```go
+import "github.com/schollz/progressbar/v3"
+
+writer, err := os.Create(pathToFile)
+defer writer.Close()
+bar := progressbar.DefaultBytes(-1, "Downloading") // will use a spinner
+res, err := request.Send(&request.Options{
+  URL:            serverURL,
+  ProgressWriter: bar,
+}, writer)
+```
+
+Again, if the progress `io.Writer` is also an `io.Closer`, it will be closed at the end of the `request.Send()`.
+
+if you provide a `request.Options.ProgressSetMax` func or if the `io.Writer` is a `request.ProgressBarMaxSetter` or a `request.ProgressBarMaxChanger`, `request.Send` will call it to set the maximum value of the progress bar from the response `Content-Length`:
+
+```go
+import "github.com/schollz/progressbar/v3"
+
+writer, err := os.Create(pathToFile)
+defer writer.Close()
+bar := progressbar.DefaultBytes(1, "Downloading") // use a temporary max value
+res, err := request.Send(&request.Options{
+  URL:            serverURL,
+  ProgressWriter: bar,
+}, writer)
+```
+
+```go
+import "github.com/cheggaaa/pb/v3"
+
+writer, err := os.Create(pathToFile)
+defer writer.Close()
+bar := pb.StartNew(1) // use a temporary max value
+res, err := request.Send(&request.Options{
+  URL:                serverURL,
+  ProgressWriter:     bar,
+  ProgressSetMaxFunc: func(max int64) { bar.SetTotal64(max) },
+}, writer)
 ```
 
 **Notes:**  
