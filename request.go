@@ -136,11 +136,11 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			return nil, err
 		}
 		defer res.Body.Close()
-		log.Debugf("Response %s in %s", res.Status, reqDuration)
-		log.Tracef("Response Headers: %#v", res.Header)
 
 		// Processing the status
 		if res.StatusCode >= 400 {
+			log.Errorf("Response %s in %s", res.Status, reqDuration)
+			log.Tracef("Response Headers: %#v", res.Header)
 			if core.Contains(options.RetryableStatusCodes, res.StatusCode) {
 				if attempt+1 < options.Attempts {
 					var retryAfter time.Duration
@@ -168,6 +168,9 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			log.Tracef("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			return resContent, errors.FromHTTPStatusCode(res.StatusCode)
 		}
+
+		log.Debugf("Response %s in %s", res.Status, reqDuration)
+		log.Tracef("Response Headers: %#v", res.Header)
 
 		// Analyze the response content type
 		resContentType := res.Header.Get("Content-Type")
@@ -341,22 +344,18 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 
 	if _content, ok := options.Payload.(Content); ok {
 		log.Tracef("Payload is a Content (Type: %s, size: %d)", _content.Type, _content.Length)
-		if len(_content.Type) == 0 {
-			if len(options.PayloadType) > 0 {
-				_content.Type = options.PayloadType
-			} else {
-				_content.Type = "application/octet-stream"
-			}
+		if len(options.PayloadType) > 0 {
+			_content.Type = options.PayloadType
+		} else if len(_content.Type) == 0 {
+			_content.Type = "application/octet-stream"
 		}
 		content = &_content
 	} else if _content, ok := options.Payload.(*Content); ok {
 		log.Tracef("Payload is a *Content (Type: %s, size: %d)", _content.Type, _content.Length)
-		if len(_content.Type) == 0 {
-			if len(options.PayloadType) > 0 {
-				_content.Type = options.PayloadType
-			} else {
-				_content.Type = "application/octet-stream"
-			}
+		if len(options.PayloadType) > 0 {
+			_content.Type = options.PayloadType
+		} else if len(_content.Type) == 0 {
+			_content.Type = "application/octet-stream"
 		}
 		content = _content
 	} else if reader, ok := options.Payload.(io.Reader); ok {
