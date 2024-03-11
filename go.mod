@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/gildas/go-core v0.5.8
 	github.com/gildas/go-errors v0.3.6
-	github.com/gildas/go-logger v1.6.13
+	github.com/gildas/go-logger v1.6.14
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/stretchr/testify v1.9.0
