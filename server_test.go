@@ -182,6 +182,16 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				if _, err := res.Write([]byte(fmt.Sprintf("%d", len(items)))); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
+			case "/pay":
+				core.RespondWithJSON(res, http.StatusCreated, struct {
+					ID       string
+					Card     string `json:"card"`
+					CardType string `json:"cardType"`
+				}{
+					ID:       "1234",
+					Card:     "3700 000001 00018",
+					CardType: "AMEX",
+				})
 			case "/retry":
 				max := core.Atoi(req.Header.Get("X-Max-Retry"), 5)
 				attempt := core.Atoi(req.Header.Get("X-Attempt"), 0)

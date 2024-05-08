@@ -1202,3 +1202,19 @@ func (suite *RequestSuite) TestCandSendRequestWithDownloadDataAndProgressMaxChan
 	suite.Assert().Equal(int64(4), bar.Total)
 	suite.Assert().Equal(int64(4), bar.Max)
 }
+
+func (suite *RequestSuite) TestCanRedactPayload() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/pay")
+	content, err := request.Send(&request.Options{
+		URL: serverURL,
+		Payload: struct {
+			Card string `json:"card"`
+		}{
+			Card: "4035 5010 0000 0008",
+		},
+		Logger: suite.Logger.Child(nil, nil, logger.AMEXRedactor, logger.VISARedactor),
+	}, nil)
+	suite.Require().NoError(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+}
