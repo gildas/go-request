@@ -145,9 +145,10 @@ func Send(options *Options, results interface{}) (*Content, error) {
 				if attempt+1 < options.Attempts {
 					var retryAfter time.Duration
 
-					log.Warnf("Retryable Response Status: %s", res.Status)
+					log.Infof("Retryable Response Status: %s", res.Status)
 					if options.InterAttemptUseRetryAfter && len(res.Header.Get("Retry-After")) > 0 {
-						retryAfter = time.Duration(core.Atoi(res.Header.Get("Retry-After"), 0)) * time.Second
+						retryAfter = time.Duration(core.Atoi(res.Header.Get("Retry-After"), 0))*time.Second + 1*time.Second // just to stay on the safe side, add 1 second
+						log.Debugf("Retry-After from headers (+1s safety net): %s", retryAfter)
 					} else {
 						elapsed := time.Since(start)
 						interval := int(elapsed/options.InterAttemptBackoffInterval) + 1
