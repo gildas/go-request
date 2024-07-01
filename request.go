@@ -140,7 +140,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		// Processing the status
 		if res.StatusCode >= 400 {
 			log.Errorf("Response %s in %s", res.Status, reqDuration)
-			log.Tracef("Response Headers: %#v", res.Header)
+			log.Debugf("Response Headers: %#v", res.Header)
 			if core.Contains(options.RetryableStatusCodes, res.StatusCode) {
 				if attempt+1 < options.Attempts {
 					var retryAfter time.Duration
@@ -166,7 +166,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			if err != nil {
 				return nil, errors.FromHTTPStatusCode(res.StatusCode)
 			}
-			log.Tracef("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
+			log.Infof("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			return resContent, errors.FromHTTPStatusCode(res.StatusCode)
 		}
 
