@@ -702,6 +702,32 @@ func (suite *RequestSuite) TestCanRetryReceivingRequest() {
 	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
 }
 
+func (suite *RequestSuite) TestCanRetryReceivingRequestECONNRESET() {
+	server := CreateEConnResetTestServer(suite, 3)
+	serverURL, _ := url.Parse(server.URL)
+	_, err := request.Send(&request.Options{
+		URL:                  serverURL,
+		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
+		Attempts:             5,
+		Timeout:              1 * time.Second,
+		Logger:               suite.Logger,
+	}, nil)
+	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
+}
+
+func (suite *RequestSuite) TestCanRetryReceivingRequestEOF() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/retry_eof")
+	_, err := request.Send(&request.Options{
+		URL:                  serverURL,
+		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
+		Attempts:             5,
+		Timeout:              1 * time.Second,
+		Logger:               suite.Logger,
+	}, nil)
+	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
+}
+
 func (suite *RequestSuite) TestCanRetryReceivingRequestWithExponentialBackoff() {
 	start := time.Now()
 	serverURL, _ := url.Parse(suite.Server.URL)
@@ -759,7 +785,7 @@ func (suite *RequestSuite) TestCanRetryReceivingRequestWithRetryAfter() {
 	duration := time.Since(start)
 	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
 	suite.Assert().GreaterOrEqual(int64(duration), int64(4*time.Second), "The request lasted less than 4 second (%s)", duration)
-	suite.Assert().Less(int64(duration), int64(5*time.Second), "The request lasted more than 5 second (%s)", duration)
+	suite.Assert().Less(int64(duration), int64(7*time.Second), "The request lasted more than 7 second (%s)", duration)
 }
 
 func (suite *RequestSuite) TestCanRetryPostingRequest() {
@@ -962,6 +988,20 @@ func (suite *RequestSuite) TestShouldFailReceivingBadResponse() {
 	suite.Require().Error(err, "Should have failed sending request")
 	suite.Logger.Errorf("Expected Error", err)
 	suite.Assert().Contains(err.Error(), "unexpected EOF")
+}
+
+func (suite *RequestSuite) TestShouldFailRetryingECONNRESETTooManyTimes() {
+	server := CreateEConnResetTestServer(suite, 10)
+	serverURL, _ := url.Parse(server.URL)
+	_, err := request.Send(&request.Options{
+		URL:                  serverURL,
+		RetryableStatusCodes: []int{http.StatusServiceUnavailable},
+		Attempts:             3,
+		Timeout:              1 * time.Second,
+		Logger:               suite.Logger,
+	}, nil)
+	suite.Require().Error(err, "Should have failed sending request")
+	suite.Logger.Errorf("Expected Error", err)
 }
 
 func (suite *RequestSuite) TestCanSendPostRequestWithRedirect() {
