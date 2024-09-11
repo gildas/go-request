@@ -9,6 +9,7 @@ import (
 	"math"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -16,6 +17,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gildas/go-core"
@@ -109,7 +111,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 	// Sending the request...
 	start := time.Now()
 	for attempt := uint(0); attempt < options.Attempts; attempt++ {
-		log.Tracef("Attempt #%d/%d", attempt+1, options.Attempts)
+		log.Tracef("Attempt #%d/%d (timeout: %s)", attempt+1, options.Attempts, httpclient.Timeout)
 		req.Header.Set("X-Attempt", strconv.FormatUint(uint64(attempt+1), 10))
 		log.Tracef("Request Headers: %#v", req.Header)
 		reqStart := time.Now()
@@ -117,6 +119,17 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		reqDuration := time.Since(reqStart)
 		log = log.Record("duration", reqDuration/time.Millisecond)
 		if err != nil {
+			netErr := &net.OpError{}
+			if errors.As(err, &netErr) && errors.Is(netErr, syscall.ECONNRESET) {
+				if attempt+1 < options.Attempts {
+					log.Warnf("Temporary failed to send request (duration: %s/%s), Error: %s", reqDuration, options.Timeout, err.Error()) // we don't want the stack here
+					log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)
+					time.Sleep(options.InterAttemptDelay)
+					req, _ = buildRequest(log, options)
+					continue
+				}
+				break
+			}
 			urlErr := &url.Error{}
 			if errors.As(err, &urlErr) {
 				if urlErr.Timeout() || urlErr.Temporary() || urlErr.Unwrap() == io.EOF || errors.Is(err, context.DeadlineExceeded) {

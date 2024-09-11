@@ -3,10 +3,13 @@ package request_test
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gildas/go-core"
@@ -14,8 +17,8 @@ import (
 	"github.com/gildas/go-request"
 )
 
-func CreateTestServer(suite *RequestSuite) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+func CreateTestServerHandler(suite *RequestSuite, server *httptest.Server) http.HandlerFunc {
+	return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		log := suite.Logger.Child("server", "handler")
 		headers := map[string]string{}
 		for key, values := range req.Header {
@@ -263,6 +266,14 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 				if _, err := res.Write([]byte(`body`)); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
+			case "/retry_eof":
+				max := core.Atoi(req.Header.Get("X-Max-Retry"), 5)
+				attempt := core.Atoi(req.Header.Get("X-Attempt"), 0)
+				if attempt < max { // On the max-th attempt, we want to return 200
+					log.Infof("Disconnecting client connections")
+					server.CloseClientConnections()
+					return
+				}
 			case "/text_data":
 				reqAccept := req.Header.Get("Accept")
 				log.Infof("Request Accept: %s", reqAccept)
@@ -366,6 +377,54 @@ func CreateTestServer(suite *RequestSuite) *httptest.Server {
 			}
 			return
 		}
-	}))
+	})
+}
 
+func CreateTestServer(suite *RequestSuite) *httptest.Server {
+	testserver := httptest.NewUnstartedServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {}))
+	testserver.Config = &http.Server{Handler: CreateTestServerHandler(suite, testserver)}
+	testserver.Start()
+	return testserver
+}
+
+type EConnResetListener struct {
+	net.Listener
+	MaxResets int
+	attempts  int
+	lock      sync.Mutex
+	Suite     *RequestSuite
+}
+
+func (listener *EConnResetListener) Accept() (net.Conn, error) {
+	log := listener.Suite.Logger.Child("listener", "accept")
+	conn, err := listener.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	listener.lock.Lock()
+	defer listener.lock.Unlock()
+
+	if listener.attempts < listener.MaxResets {
+		log.Infof("Connection Reset #%d", listener.attempts)
+		listener.attempts++
+		conn.Close()
+		return nil, &net.OpError{Op: "accept", Net: "tcp", Source: nil, Addr: conn.RemoteAddr(), Err: syscall.ECONNRESET}
+	}
+	return conn, nil
+}
+
+func CreateEConnResetTestServer(suite *RequestSuite, maxResets int) *httptest.Server {
+	listener := &EConnResetListener{
+		Listener:  core.Must(net.Listen("tcp", "127.0.0.1:0")),
+		MaxResets: maxResets,
+		attempts:  0,
+		Suite:     suite,
+	}
+	testserver := &httptest.Server{
+		Listener: listener,
+		Config:   &http.Server{Handler: http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {})},
+	}
+	testserver.Config = &http.Server{Handler: CreateTestServerHandler(suite, testserver)}
+	testserver.Start()
+	return testserver
 }

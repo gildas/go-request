@@ -145,6 +145,8 @@ res, err := request.Send(&request.Options{
 
 By default, upon receiving a retryable status code, `Send` will use am exponential backoff algorithm to retry the request. By default, it will wait for 3 seconds before retrying for 5 minutes, then 9 seconds between 5 and 10 minutes, then 27 seconds between 10 and 15 minutes, etc.
 
+Connection errors like EOF, connection reset, etc. are also retried `Options.Attempts` times. The default is 5 attempts and the code waits for `Options.InterAttemptDelay` (Default: 3s).
+
 You can change the delay and the backoff factor like this:
 
 ```go
