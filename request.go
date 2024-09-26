@@ -239,7 +239,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			log.Tracef("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			err = json.Unmarshal(resContent.Data, results)
 			if err != nil {
-				log.Debugf("Failed to unmarshal response body, use the Content, JSON Error: %s", err)
+				return resContent, errors.JSONUnmarshalError.WrapIfNotMe(err)
 			}
 			return resContent, nil
 		}
