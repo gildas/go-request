@@ -41,7 +41,7 @@ func (algorithm CryptoAlgorithm) MarshalJSON() ([]byte, error) {
 func (algorithm *CryptoAlgorithm) UnmarshalJSON(data []byte) (err error) {
 	var value string
 	if err = json.Unmarshal(data, &value); err != nil {
-		return errors.JSONUnmarshalError.Wrap(err)
+		return errors.JSONUnmarshalError.WrapIfNotMe(err)
 	}
 	*algorithm, err = CryptoAlgorithmFromString(value)
 	return errors.JSONUnmarshalError.Wrap(err)

@@ -494,7 +494,7 @@ func (suite *RequestSuite) TestCanSendRequestWithResults() {
 	suite.Assert().Equal(1234, results.Code, "Results should have been received and decoded")
 }
 
-func (suite *RequestSuite) TestCanSendRequestWithResultsAndInvalidData() {
+func (suite *RequestSuite) TestShouldFailWithInvalidDataAsResults() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	serverURL, _ = serverURL.Parse("/")
 	results := struct {
@@ -504,10 +504,12 @@ func (suite *RequestSuite) TestCanSendRequestWithResultsAndInvalidData() {
 		URL:    serverURL,
 		Logger: suite.Logger,
 	}, &results)
-	suite.Require().NoError(err, "Failed sending request, err=%+v", err)
+	suite.Require().Error(err, "Failed sending request, err=%+v", err)
+	suite.T().Logf("Expected Error: %+v", err)
+	suite.Logger.Errorf("Expected Error", err)
+	suite.Require().ErrorIs(err, errors.JSONUnmarshalError, "Error should be a JSON Unmarshal error")
 	suite.Require().NotNil(content, "Content should not be nil")
-	suite.Assert().Equal(0, results.Code, "Results should not have been decoded")
-	suite.Assert().Equal("body", string(content.Data))
+	suite.Logger.Infof("Body: %s", content.Data)
 }
 
 func (suite *RequestSuite) TestCanSendRequestWithToken() {

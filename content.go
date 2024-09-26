@@ -102,7 +102,7 @@ func (content *Content) ReadCloser() io.ReadCloser {
 // UnmarshalContentJSON unmarshals its Data into JSON
 func (content Content) UnmarshalContentJSON(v interface{}) (err error) {
 	if err = json.Unmarshal(content.Data, &v); err != nil {
-		return errors.JSONUnmarshalError.Wrap(err)
+		return errors.JSONUnmarshalError.WrapIfNotMe(err)
 	}
 	return nil
 }
@@ -165,7 +165,7 @@ func (content *Content) UnmarshalJSON(payload []byte) error {
 		Cookies []*cookie `json:"cookies,omitempty"`
 	}
 	if err := json.Unmarshal(payload, &inner); err != nil {
-		return errors.JSONUnmarshalError.Wrap(err)
+		return errors.JSONUnmarshalError.WrapIfNotMe(err)
 	}
 	*content = Content(inner.surrogate)
 	content.URL = (*url.URL)(inner.URL)
