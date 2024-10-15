@@ -237,9 +237,11 @@ func Send(options *Options, results interface{}) (*Content, error) {
 				return nil, errors.WithStack(err)
 			}
 			log.Tracef("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
-			err = json.Unmarshal(resContent.Data, results)
-			if err != nil {
-				return resContent, errors.JSONUnmarshalError.WrapIfNotMe(err)
+			if resContent.Length > 0 {
+				err = json.Unmarshal(resContent.Data, results)
+				if err != nil {
+					return resContent, errors.JSONUnmarshalError.WrapIfNotMe(err)
+				}
 			}
 			return resContent, nil
 		}
