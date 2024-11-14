@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -715,6 +716,52 @@ func (suite *RequestSuite) TestCanRetryReceivingRequestECONNRESET() {
 		Logger:               suite.Logger,
 	}, nil)
 	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
+}
+
+func (suite *RequestSuite) TestCanRetryReceivingRequestECONNREFUSED() {
+	// Start the client in a separate goroutine
+	go func() {
+		serverURL, _ := url.Parse("http://localhost:1234")
+		response, err := request.Send(&request.Options{
+			URL:      serverURL,
+			Attempts: 2,
+			Timeout:  1 * time.Second,
+			Logger:   suite.Logger,
+		}, nil)
+		suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
+		suite.Assert().Equal("body", string(response.Data))
+	}()
+
+	listener, err := net.Listen("tcp", ":1234")
+	suite.Require().NoError(err, "Failed starting the listener")
+	listener.Close() // that will cause the ECONNREFUSED
+	time.Sleep(2 * time.Second)
+
+	listener, err = net.Listen("tcp", ":1234")
+	suite.Require().NoError(err, "Failed starting the listener")
+	defer listener.Close()
+
+	// accept the connection
+	conn, err := listener.Accept()
+	suite.Require().NoError(err, "Failed accepting the connection")
+	defer conn.Close()
+
+	_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nbody"))
+	time.Sleep(1 * time.Second)
+}
+
+func (suite *RequestSuite) TestCanRetryReceivingRequestECONNABORTED() {
+	server := CreateEConnAbortedTestServer(suite, 3)
+	defer server.Close()
+
+	serverURL, _ := url.Parse(server.URL)
+	_, err := request.Send(&request.Options{
+		URL:      serverURL,
+		Attempts: 5,
+		Timeout:  1 * time.Second,
+		Logger:   suite.Logger,
+	}, nil)
+	suite.Require().NoError(err, "Failed reading response content")
 }
 
 func (suite *RequestSuite) TestCanRetryReceivingRequestEOF() {

@@ -120,7 +120,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		log = log.Record("duration", reqDuration/time.Millisecond)
 		if err != nil {
 			netErr := &net.OpError{}
-			if errors.As(err, &netErr) && errors.Is(netErr, syscall.ECONNRESET) {
+			if errors.As(err, &netErr) && (errors.Is(netErr, syscall.ECONNRESET) || errors.Is(netErr, syscall.ECONNABORTED) || errors.Is(netErr, syscall.ECONNREFUSED)) {
 				if attempt+1 < options.Attempts {
 					log.Warnf("Temporary failed to send request (duration: %s/%s), Error: %s", reqDuration, options.Timeout, err.Error()) // we don't want the stack here
 					log.Infof("Waiting for %s before trying again", options.InterAttemptDelay)

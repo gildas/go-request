@@ -428,3 +428,17 @@ func CreateEConnResetTestServer(suite *RequestSuite, maxResets int) *httptest.Se
 	testserver.Start()
 	return testserver
 }
+
+func CreateEConnAbortedTestServer(suite *RequestSuite, failAttempts int) *httptest.Server {
+	attempts := 0
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if attempts < failAttempts {
+			attempts++
+			conn, _, _ := w.(http.Hijacker).Hijack()
+			conn.Close() // This will cause ECONNABORTED
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	}))
+}
