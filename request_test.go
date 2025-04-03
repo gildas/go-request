@@ -875,6 +875,19 @@ func (suite *RequestSuite) TestCanRetryPostingRequestWithAttachment() {
 	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
 }
 
+func (suite *RequestSuite) TestCanRetryWithStatusAccepted() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/retry-accepted")
+	_, err := request.Send(&request.Options{
+		URL:                  serverURL,
+		RetryableStatusCodes: []int{http.StatusAccepted},
+		Attempts:             5,
+		Timeout:              1 * time.Second,
+		Logger:               suite.Logger,
+	}, nil)
+	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
+}
+
 func (suite *RequestSuite) TestShouldFailPostingWithNonSeekerPayloadAndAttempts() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	reader := failingReader(0) // This reader cannot seek
