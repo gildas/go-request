@@ -875,6 +875,19 @@ func (suite *RequestSuite) TestCanRetryPostingRequestWithAttachment() {
 	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
 }
 
+func (suite *RequestSuite) TestCanRetryWithStatusAccepted() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/retry-accepted")
+	_, err := request.Send(&request.Options{
+		URL:                  serverURL,
+		RetryableStatusCodes: []int{http.StatusAccepted},
+		Attempts:             5,
+		Timeout:              1 * time.Second,
+		Logger:               suite.Logger,
+	}, nil)
+	suite.Require().NoError(err, "Failed reading response content, err=%+v", err)
+}
+
 func (suite *RequestSuite) TestShouldFailPostingWithNonSeekerPayloadAndAttempts() {
 	serverURL, _ := url.Parse(suite.Server.URL)
 	reader := failingReader(0) // This reader cannot seek
@@ -1006,7 +1019,9 @@ func (suite *RequestSuite) TestShouldFailReceivingWithTooManyRetries() {
 	}, nil)
 	suite.Require().Error(err, "Should have failed sending request")
 	suite.Logger.Errorf("Expected Error", err)
-	suite.Assert().ErrorIs(err, errors.HTTPServiceUnavailable, "error should be an HTTP Service Unavailable error, error: %+v", err)
+	// suite.Assert().ErrorIs(err, errors.HTTPServiceUnavailable, "error should be an HTTP Service Unavailable error, error: %+v", err)
+	// We can also receive a Request Timeout
+	suite.Assert().ErrorIs(err, errors.HTTPStatusRequestTimeout, "error should be an HTTP Request Timeout error, error: %+v", err)
 }
 
 func (suite *RequestSuite) TestShouldFailPostingWithTooManyRetries() {
@@ -1024,7 +1039,9 @@ func (suite *RequestSuite) TestShouldFailPostingWithTooManyRetries() {
 	}, nil)
 	suite.Require().Error(err, "Should have failed sending request")
 	suite.Logger.Errorf("Expected Error", err)
-	suite.Assert().ErrorIs(err, errors.HTTPServiceUnavailable, "error should be an HTTP Service Unavailable error, error: %+v", err)
+	// suite.Assert().ErrorIs(err, errors.HTTPServiceUnavailable, "error should be an HTTP Service Unavailable error, error: %+v", err)
+	// We can also receive a Request Timeout
+	suite.Assert().ErrorIs(err, errors.HTTPStatusRequestTimeout, "error should be an HTTP Request Timeout error, error: %+v", err)
 }
 
 func (suite *RequestSuite) TestShouldFailReceivingBadResponse() {

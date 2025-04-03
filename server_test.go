@@ -313,6 +313,16 @@ func CreateTestServerHandler(suite *RequestSuite, server *httptest.Server) http.
 					res.WriteHeader(returnStatus)
 					return
 				}
+			case "/retry-accepted":
+				max := core.Atoi(req.Header.Get("X-Max-Retry"), 5)
+				attempt := core.Atoi(req.Header.Get("X-Attempt"), 0)
+				if attempt < max { // On the max-th attempt, we want to return 200
+					retryAfter := core.Atoi(req.Header.Get("X-Retry-After"), 5)
+					res.Header().Add("Retry-After", strconv.Itoa(retryAfter))
+					returnStatus := core.Atoi(req.Header.Get("X-Return-Status"), http.StatusAccepted)
+					res.WriteHeader(returnStatus)
+					return
+				}
 			case "/redirect":
 				queryString := "response-content-disposition=attachment%3Bfilename%3D%22Bo%C3%AEte-Vitamine-C.jpg%22&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEAQaDmFwLW5vcnRoZWFzdC0xIkYwRAIgXwjLAgEAHaXF5ADwxHrr%2BGzy2g5P69h5y5e68hHwjzECIFGV5tHl%2FS8VSIVjsWkxwE5Ks9QlkmM2MIVnB5XD5OvUKo0ECO3%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQABoMNzY1NjI4OTg1NDcxIgz%2Bjt73UFcVYMCGvYQq4QO02iQHzW%2FH%2Fs8El%2BTPF0ekwyOpSN0rxQ6482INGSqGiW%2FELVFRayVTR9T1nbuZ74FVuDe2VYWHYOYPyfmaZiKAnh0cR1kQdSE2A6SUhhkG%2BW0KF1Sw0O5J33f43fvhQYqcj%2FIAMTUB8FuVAN03hNYPQck83F%2FjuGYepPJ7AZGHix%2FYtUAB18Wq%2B3idKOS1abya0wV5pS9PSYK2hnt2pDMu82U2rjhNciQpAwBYIt%2FgGmQ1KQ3YGa8hpp5%2BBMC%2FDHletUEo257cAhZzwMOO3uyhK%2FVC1%2Fc3vthmA9EuWXpnbMXXGykZh7Ya26ookMSRXj10Fsz%2BGSe%2Fyan4vePUuwvTS6aozvL7KxoSs6wxD8pAzQRKkn1lf0i6Xzip461xAy8X0YowwxGE8XPzGcLztxgi7L5ef7NI3IzMphWkwH4QMiBD4D7ptGoE16j2zflmXkXNBPH9IBA1KJ%2Bqv1g6Olmrav19oWMDmVoQWD8%2FW%2BYBEobNOAPUJ6hfppxpinuAPMf1uIueFQrgwY58y3vy6WuMQmvjaIIu2u2QqSqH%2BK3SA3AIzcrEmoEub6OxO5Kge8LroqKr18LK2MNj4ZGzgPRrG%2F3aEIT7y0OHqBMF4TUCBFpwPwpuQz6f9yjKhqlZxypBMJ%2BDtocGOqYBoNa1X%2B6yOM2qg7T%2BtP8UNOFw4vZN73svJWhiqXe9lQhdwPvfRFIhrgIdlbvym3eSBD4C%2FyxtxWr9E4lxyFPfW3a6fV%2B7kl1aPjaE85LgVBJ2EGQ4bm1jNwQ1WGIQo%2FYlKBRC5f%2BekV64pv0ol6BQRwOF%2B9mXHRPigu64LVRTgRQBhgrneLEa00GS%2Bur3Nt1yPmTVWvMIoO0%2FBNM0VbBXsbtePl5ozQ%3D%3D&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20210713T123747Z&X-Amz-SignedHeaders=host&X-Amz-Expires=3600&X-Amz-Credential=ASIA3EQYLGB7Q6I4XLIG%2F20210713%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Signature=853f1611536e57902b0fcabd36e7fbe77fe2278f40a0aeed4116953ea6ef4873"
 				res.Header().Add("Cache-Control", "no-cache")

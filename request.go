@@ -154,33 +154,25 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		if res.StatusCode >= 400 {
 			log.Errorf("Response %s in %s", res.Status, reqDuration)
 			log.Debugf("Response Headers: %#v", res.Header)
-			if core.Contains(options.RetryableStatusCodes, res.StatusCode) {
-				if attempt+1 < options.Attempts {
-					var retryAfter time.Duration
-
-					log.Infof("Retryable Response Status: %s", res.Status)
-					if options.InterAttemptUseRetryAfter && len(res.Header.Get("Retry-After")) > 0 {
-						retryAfter = time.Duration(core.Atoi(res.Header.Get("Retry-After"), 0))*time.Second + 1*time.Second // just to stay on the safe side, add 1 second
-						log.Debugf("Retry-After from headers (+1s safety net): %s", retryAfter)
-					} else {
-						elapsed := time.Since(start)
-						interval := int(elapsed/options.InterAttemptBackoffInterval) + 1
-						retryAfter = time.Duration(math.Pow(options.InterAttemptDelay.Seconds(), float64(interval))) * time.Second
-						log.Debugf("Interval: %d, delay: %s, Exponential Backoff: %s", interval, options.InterAttemptDelay, retryAfter)
-					}
-					log.Infof("Waiting for %s before trying again", retryAfter)
-					time.Sleep(retryAfter)
-					req, _ = buildRequest(log, options)
-					continue
-				}
+			if shouldRetryAfterDelay(log, res, options, attempt, time.Since(start)) {
+				req, _ = buildRequest(log, options)
+				continue
 			}
 			// Read the body to get the error message
 			resContent, err := ContentFromReader(res.Body, res.Header.Get("Content-Type"), core.Atoi(res.Header.Get("Content-Length"), 0), res.Header, res.Cookies(), log)
 			if err != nil {
 				return nil, errors.FromHTTPStatusCode(res.StatusCode)
 			}
+			resContent.StatusCode = res.StatusCode
+			resContent.Status = res.Status
 			log.Infof("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			return resContent, errors.FromHTTPStatusCode(res.StatusCode)
+		}
+
+		// Response is successful, but we might still need to retry (common example: 202 Accepted)
+		if shouldRetryAfterDelay(log, res, options, attempt, time.Since(start)) {
+			req, _ = buildRequest(log, options)
+			continue
 		}
 
 		log.Debugf("Response %s in %s", res.Status, reqDuration)
@@ -206,7 +198,6 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		log.Tracef("Computed Response Content-Type: %s", resContentType)
 
 		// Reading the response body
-
 		if writer, ok := results.(io.Writer); ok {
 			if options.ProgressWriter != nil {
 				if options.ProgressSetMaxFunc != nil {
@@ -230,12 +221,16 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			}
 			log.Tracef("Read %d bytes", bytesRead)
 			resContent := ContentWithData([]byte{}, resContentType, bytesRead, res.Header, res.Cookies())
+			resContent.StatusCode = res.StatusCode
+			resContent.Status = res.Status
 			return resContent, nil
 		} else if results != nil { // Unmarshaling the response body if requested (structs, arrays, maps, etc)
 			resContent, err := ContentFromReader(res.Body, resContentType, res.Header, res.Cookies(), log)
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
+			resContent.StatusCode = res.StatusCode
+			resContent.Status = res.Status
 			log.Tracef("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			if resContent.Length > 0 {
 				err = json.Unmarshal(resContent.Data, results)
@@ -570,6 +565,29 @@ func buildRequest(log *logger.Logger, options *Options) (*http.Request, error) {
 		}
 	}
 	return req, nil
+}
+
+// ShouldRetry checks if the request should be retried
+//
+// If true, it will also wait for the delay before returning
+func shouldRetryAfterDelay(log *logger.Logger, res *http.Response, options *Options, attempt uint, elapsed time.Duration) bool {
+	if !core.Contains(options.RetryableStatusCodes, res.StatusCode) || attempt >= options.Attempts {
+		return false
+	}
+	var retryAfter time.Duration
+
+	log.Infof("Retryable Response Status %d: %s", res.StatusCode, res.Status)
+	if options.InterAttemptUseRetryAfter && len(res.Header.Get("Retry-After")) > 0 {
+		retryAfter = time.Duration(core.Atoi(res.Header.Get("Retry-After"), 0))*time.Second + 1*time.Second // just to stay on the safe side, add 1 second
+		log.Debugf("Retry-After from headers (+1s safety net): %s", retryAfter)
+	} else {
+		interval := int(elapsed/options.InterAttemptBackoffInterval) + 1
+		retryAfter = time.Duration(math.Pow(options.InterAttemptDelay.Seconds(), float64(interval))) * time.Second
+		log.Debugf("Interval: %d, delay: %s, Exponential Backoff: %s", interval, options.InterAttemptDelay, retryAfter)
+	}
+	log.Infof("Waiting for %s before trying again", retryAfter)
+	time.Sleep(retryAfter)
+	return true
 }
 
 func marshal(payload interface{}) ([]byte, error) {

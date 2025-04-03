@@ -19,13 +19,15 @@ import (
 
 // Content defines some content
 type Content struct {
-	Type    string         `json:"Type"`
-	Name    string         `json:"Name,omitempty"`
-	URL     *url.URL       `json:"-"`
-	Length  uint64         `json:"Length"`
-	Data    []byte         `json:"Data"`
-	Headers http.Header    `json:"headers,omitempty"`
-	Cookies []*http.Cookie `json:"-"`
+	Type       string         `json:"Type"`
+	StatusCode int            `json:"StatusCode,omitempty"`
+	Status     string         `json:"Status,omitempty"`
+	Name       string         `json:"Name,omitempty"`
+	URL        *url.URL       `json:"-"`
+	Length     uint64         `json:"Length"`
+	Data       []byte         `json:"Data"`
+	Headers    http.Header    `json:"headers,omitempty"`
+	Cookies    []*http.Cookie `json:"-"`
 }
 
 // ContentWithData instantiates a Content from a simple byte array
