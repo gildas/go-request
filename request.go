@@ -179,6 +179,8 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			if err != nil {
 				return nil, errors.FromHTTPStatusCode(res.StatusCode)
 			}
+			resContent.StatusCode = res.StatusCode
+			resContent.Status = res.Status
 			log.Infof("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			return resContent, errors.FromHTTPStatusCode(res.StatusCode)
 		}
@@ -206,7 +208,6 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		log.Tracef("Computed Response Content-Type: %s", resContentType)
 
 		// Reading the response body
-
 		if writer, ok := results.(io.Writer); ok {
 			if options.ProgressWriter != nil {
 				if options.ProgressSetMaxFunc != nil {
@@ -230,12 +231,16 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			}
 			log.Tracef("Read %d bytes", bytesRead)
 			resContent := ContentWithData([]byte{}, resContentType, bytesRead, res.Header, res.Cookies())
+			resContent.StatusCode = res.StatusCode
+			resContent.Status = res.Status
 			return resContent, nil
 		} else if results != nil { // Unmarshaling the response body if requested (structs, arrays, maps, etc)
 			resContent, err := ContentFromReader(res.Body, resContentType, res.Header, res.Cookies(), log)
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
+			resContent.StatusCode = res.StatusCode
+			resContent.Status = res.Status
 			log.Tracef("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
 			if resContent.Length > 0 {
 				err = json.Unmarshal(resContent.Data, results)
