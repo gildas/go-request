@@ -1095,6 +1095,21 @@ func (suite *RequestSuite) TestCanSendGetRequestWithRedirect() {
 	suite.Assert().Equal("body", string(content.Data))
 }
 
+func (suite *RequestSuite) TestCanSendGetRequestWithoutFollowingRedirect() {
+	serverURL, _ := url.Parse(suite.Server.URL)
+	serverURL, _ = serverURL.Parse("/redirect")
+	content, err := request.Send(&request.Options{
+		URL:               serverURL,
+		NoFollowRedirects: true,
+		Logger:            suite.Logger,
+	}, nil)
+	suite.Require().NoError(err, "Failed sending request, err=%+v", err)
+	suite.Require().NotNil(content, "Content should not be nil")
+	suite.Assert().Equal(http.StatusSeeOther, content.StatusCode)
+	suite.Assert().True(strings.HasPrefix(content.Headers.Get("Location"), "/Bo%C3%AEte.png?"), "Location header should point to the redirect target, got %s", content.Headers.Get("Location"))
+	suite.Assert().Empty(content.Data, "Content should not contain the redirect target body")
+}
+
 func (suite *RequestSuite) TestCanSendRequestWithContentPayloadAndOneTimeout() {
 	requestTimeout := 500 * time.Millisecond
 	suite.Logger.Infof("Request Timeout: %s", requestTimeout)

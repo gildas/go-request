@@ -46,6 +46,7 @@ type Options struct {
 	Transport                   *http.Transport
 	ProgressWriter              io.Writer // if not nil, the progress of the request will be written to this writer
 	ProgressSetMaxFunc          func(int64)
+	NoFollowRedirects           bool          // if true, the client will not follow HTTP redirects automatically
 	RetryableStatusCodes        []int         // Status codes that should be retried, by default: 429, 502, 503, 504
 	Attempts                    uint          // number of attempts, by default: 5
 	InterAttemptDelay           time.Duration // how long to wait between 2 attempts during the first backoff interval, by default: 3s
@@ -100,6 +101,10 @@ func Send(options *Options, results interface{}) (*Content, error) {
 	httpclient := http.Client{
 		Transport: options.Transport,
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
+			if options.NoFollowRedirects {
+				log.Infof("Not following WEB Link: %s", r.URL)
+				return http.ErrUseLastResponse
+			}
 			log.Tracef("Following WEB Link: %s", r.URL)
 			for _, v := range via {
 				log.Tracef("Via: %s", v.URL)
@@ -247,6 +252,8 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
 			return nil, err                                           // err is already "decorated" by ContentReader
 		}
+		resContent.StatusCode = res.StatusCode
+		resContent.Status = res.Status
 		log.Tracef("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
 
 		return resContent, nil
