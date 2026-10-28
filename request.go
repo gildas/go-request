@@ -46,6 +46,7 @@ type Options struct {
 	Transport                   *http.Transport
 	ProgressWriter              io.Writer // if not nil, the progress of the request will be written to this writer
 	ProgressSetMaxFunc          func(int64)
+	NoFollowRedirects           bool          // if true, the client will not follow HTTP redirects automatically
 	RetryableStatusCodes        []int         // Status codes that should be retried, by default: 429, 502, 503, 504
 	Attempts                    uint          // number of attempts, by default: 5
 	InterAttemptDelay           time.Duration // how long to wait between 2 attempts during the first backoff interval, by default: 3s
@@ -100,6 +101,14 @@ func Send(options *Options, results interface{}) (*Content, error) {
 	httpclient := http.Client{
 		Transport: options.Transport,
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
+			if options.NoFollowRedirects {
+				log.Infof("Not following WEB Link")
+				log.Tracef("WEB Link: %s", r.URL)
+				for _, v := range via {
+					log.Tracef("Via: %s", v.URL)
+				}
+				return http.ErrUseLastResponse
+			}
 			log.Tracef("Following WEB Link: %s", r.URL)
 			for _, v := range via {
 				log.Tracef("Via: %s", v.URL)
@@ -153,7 +162,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		// Processing the status
 		if res.StatusCode >= 400 {
 			log.Errorf("Response %s in %s", res.Status, reqDuration)
-			log.Debugf("Response Headers: %#v", res.Header)
+			log.Debugf("Response Headers: %#v", logger.RedactHTTPHeaders(res.Header))
 			if shouldRetryAfterDelay(log, res, options, attempt, time.Since(start)) {
 				req, _ = buildRequest(log, options)
 				continue
@@ -247,6 +256,8 @@ func Send(options *Options, results interface{}) (*Content, error) {
 			log.Errorf("Failed to read response body: %v%s", err, "") // the extra string arg is to prevent the logger to dump the stack trace
 			return nil, err                                           // err is already "decorated" by ContentReader
 		}
+		resContent.StatusCode = res.StatusCode
+		resContent.Status = res.Status
 		log.Tracef("Response body in %s: %s", time.Since(start), resContent.LogString(uint64(options.ResponseBodyLogSize)))
 
 		return resContent, nil
@@ -326,13 +337,13 @@ func normalizeOptions(options *Options, results interface{}) (err error) {
 		if options.Payload != nil {
 			if _, ok := options.Payload.(io.Reader); ok {
 				if _, ok := options.Payload.(io.Seeker); !ok {
-					return errors.WrapErrors(errors.ArgumentInvalid.With("Payload", fmt.Sprintf("%T", options.Payload)), fmt.Errorf("Payload must be an io.Seeker if you want to retry the request"))
+					return errors.WrapErrors(errors.ArgumentInvalid.With("Payload", fmt.Sprintf("%T", options.Payload)), fmt.Errorf("payload must be an io.Seeker if you want to retry the request"))
 				}
 			}
 		}
 		if options.Attachment != nil {
 			if _, ok := options.Attachment.(io.Seeker); !ok {
-				return errors.WrapErrors(errors.ArgumentInvalid.With("Attachment", fmt.Sprintf("%T", options.Attachment)), fmt.Errorf("Attachment must be an io.Seeker if you want to retry the request"))
+				return errors.WrapErrors(errors.ArgumentInvalid.With("Attachment", fmt.Sprintf("%T", options.Attachment)), fmt.Errorf("attachment must be an io.Seeker if you want to retry the request"))
 			}
 		}
 	}
@@ -374,7 +385,7 @@ func buildRequestContent(log *logger.Logger, options *Options) (content *Content
 		content, _ = ContentFromReader(reader, options.PayloadType, 0, nil, nil)
 	} else {
 		payloadType := reflect.TypeOf(options.Payload)
-		if payloadType.Kind() == reflect.Struct || (payloadType.Kind() == reflect.Ptr && reflect.Indirect(reflect.ValueOf(options.Payload)).Kind() == reflect.Struct) { // JSONify the payload
+		if payloadType.Kind() == reflect.Struct || (payloadType.Kind() == reflect.Pointer && reflect.Indirect(reflect.ValueOf(options.Payload)).Kind() == reflect.Struct) { // JSONify the payload
 			var payload []byte
 
 			log.Tracef("Payload is a Struct, JSONifying it")

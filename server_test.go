@@ -71,7 +71,7 @@ func CreateTestServerHandler(suite *RequestSuite, server *httptest.Server) http.
 					}
 				}
 
-				if _, err := res.Write([]byte(fmt.Sprintf("%d", len(items)))); err != nil {
+				if _, err := fmt.Fprintf(res, "%d", len(items)); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
 			case "/bytes":
@@ -82,7 +82,7 @@ func CreateTestServerHandler(suite *RequestSuite, server *httptest.Server) http.
 					return
 				}
 				log.Infof("Request body: %s, %d bytes: \n%s", reqContent.Type, reqContent.Length, string(reqContent.Data))
-				if _, err := res.Write([]byte(fmt.Sprintf("%d", len(reqContent.Data)))); err != nil {
+				if _, err := fmt.Fprintf(res, "%d", len(reqContent.Data)); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
 			case "/item":
@@ -182,7 +182,7 @@ func CreateTestServerHandler(suite *RequestSuite, server *httptest.Server) http.
 						return
 					}
 				}
-				if _, err := res.Write([]byte(fmt.Sprintf("%d", len(items)))); err != nil {
+				if _, err := fmt.Fprintf(res, "%d", len(items)); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
 			case "/pay":
@@ -370,7 +370,7 @@ func CreateTestServerHandler(suite *RequestSuite, server *httptest.Server) http.
 					return
 				}
 				log.Infof("Deleting #%d items", len(items))
-				if _, err := res.Write([]byte(fmt.Sprintf("%d", len(items)))); err != nil {
+				if _, err := fmt.Fprintf(res, "%d", len(items)); err != nil {
 					log.Errorf("Failed to Write response to %s %s, error: %s", req.Method, req.URL, err)
 				}
 			default:
