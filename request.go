@@ -153,7 +153,7 @@ func Send(options *Options, results interface{}) (*Content, error) {
 		// Processing the status
 		if res.StatusCode >= 400 {
 			log.Errorf("Response %s in %s", res.Status, reqDuration)
-			log.Debugf("Response Headers: %#v", res.Header)
+			log.Debugf("Response Headers: %#v", logger.RedactHTTPHeaders(res.Header))
 			if shouldRetryAfterDelay(log, res, options, attempt, time.Since(start)) {
 				req, _ = buildRequest(log, options)
 				continue
